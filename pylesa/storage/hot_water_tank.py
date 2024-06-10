@@ -174,14 +174,18 @@ class HotWaterTank(object):
         return ambient_temp
 
     def discharging_function(self, state, nodes_temp, flow_temp, node = None):
+        """Determine which nodes in the tank are discharging
 
-        # total nodes is the number of nodes being modelled
-        # nodes_temp is a dict of the nodes and their temperatures
-        # return_temp is the temperature from the scheme going
-        # back into the storage
+        Args:
+            total nodes, is the number of nodes being modelled
+            nodes_temp, is a dict of the nodes and their temperatures
+            return_temp, is the temperature from the scheme going back into the storage
 
+        Returns:
+            list of 1 (discharging) or 0
+        """
         total_nodes = self.number_nodes
-        function = {}
+        out = list(range(len(self.node_list)))
         
         if node is not None:
             node_list = [node]
@@ -190,78 +194,75 @@ class HotWaterTank(object):
 
         if state == 'discharging':
 
-            for node in node_list:
+            for idx, node in enumerate(node_list):
 
                 # this asks if we are looking at the top node
                 # and if the charging water is above this nodes temp
                 if node == 0 and flow_temp <= nodes_temp[0]:
-                    function[node] = 1
+                    out[idx] = 1
 
                 # if the source temp is lower than
                 elif node == 0 and flow_temp >= nodes_temp[0]:
-                    function[node] = 0
+                    out[idx] = 0
 
                 # top node then goes in other node
                 elif flow_temp < nodes_temp[node] and flow_temp >= nodes_temp[node - 1]:
-                    function[node] = 1
+                    out[idx] = 1
 
                 # for out of bounds nodes, shouldnt occur
                 elif node < 0 or node == total_nodes + 1:
-                    function[node] = 0
+                    out[idx] = 0
 
                 else:
-                    function[node] = 0
+                    out[idx] = 0
 
         elif state == 'charging' or state == 'standby':
-            for node in node_list:
-                function[node] = 0
+            for idx, node in enumerate(node_list):
+                out[idx] = 0
 
-        return function
+        return out
 
-    def discharging_bottom_node(self, state, nodes_temp,
-                                return_temp, flow_temp):
+    def discharging_bottom_node(self, nodes_temp, flow_temp, df):
 
         total_nodes = self.number_nodes
-        function = {}
+        out = list(range(len(self.node_list)))
         bottom_node = total_nodes - 1
 
-        df = self.discharging_function(state, nodes_temp, flow_temp)
-        df_list = []
-        for i in range(total_nodes):
-            df_list.append(df[i])
+        if 1 in df:
 
-        if 1 in df_list:
-
-            for node in self.node_list:
+            for idx, node in enumerate(self.node_list):
 
                 # this asks if we are looking at the bottom node
                 if node == bottom_node and nodes_temp[0] >= flow_temp:
-                    function[node] = 1
+                    out[idx] = 1
 
                 elif node == bottom_node and nodes_temp[0] < flow_temp:
-                    function[node] = 0
+                    out[idx] = 0
 
                 else:
-                    function[node] = 0
+                    out[idx] = 0
 
         else:
-            for node in self.node_list:
-                function[node] = 0
+            for idx, node in enumerate(self.node_list):
+                out[idx] = 0
 
-        return function
+        return out
 
     def charging_function(self, state, nodes_temp, source_temp, node = None):
+        """Determine which nodes in the tank are discharging
 
-        # this determines which node recieves the charging water
+        If the in mass exceeds the node volume then next node also charged.
 
-        # total nodes is the number of nodes being modelled
-        # nodes_temp is a dict of the nodes and their temperatures
-        # source_temp is the temperature from the source going into the storage
+        Args:
+            total nodes, is the number of nodes being modelled
+            nodes_temp, is a dict of the nodes and their temperatures
+            source_temp, is the temperature from the source going into the storage
 
-        # if the in mass exceeds the node volume then next node also charged
-
+        Returns:
+            list of 1 (charging) or 0
+        """
         total_nodes = self.number_nodes
-        function = {}
+        out = list(range(len(self.node_list)))
 
         if node is not None:
             node_list = [node]
@@ -270,32 +271,32 @@ class HotWaterTank(object):
 
         if state == 'charging':
 
-            for node in node_list:
+            for idx, node in enumerate(node_list):
 
                 # this asks if we are looking at the top node
                 # and if the charging water is above this nodes temp
                 if node == 0 and source_temp >= nodes_temp[0]:
-                    function[node] = 1
+                    out[idx] = 1
 
                 # if the source temp is lower than
                 elif node == 0 and source_temp <= nodes_temp[0]:
-                    function[node] = 0
+                    out[idx] = 0
 
                 # top node then goes in other node
                 elif source_temp >= nodes_temp[node] and source_temp <= nodes_temp[node - 1]:
-                    function[node] = 1
+                    out[idx] = 1
 
                 # for out of bounds nodes, shouldnt occur
                 elif node < 0 or node == total_nodes + 1:
-                    function[node] = 0
+                    out[idx] = 0
 
                 else:
-                    function[node] = 0
+                    out[idx] = 0
 
         elif state == 'discharging' or 'standby':
-            for node in node_list:
-                function[node] = 0
-        return function
+            for idx, node in enumerate(node_list):
+                out[idx] = 0
+        return out
 
     def charging_top_node(self, state):
 
@@ -309,31 +310,20 @@ class HotWaterTank(object):
 
         return function
 
-    def mixing_function(self, state, node, nodes_temp,
-                        source_temp, flow_temp):
+    def mixing_function(self, state, node, cf, df):
 
         total_nodes = self.number_nodes
         bottom_node = total_nodes - 1
 
-        cf = self.charging_function(state, nodes_temp, source_temp)
-        cf_list = []
-        for i in range(total_nodes):
-            cf_list.append(cf[i])
-
-        df = self.discharging_function(state, nodes_temp, flow_temp)
-        df_list = []
-        for i in range(total_nodes):
-            df_list.append(df[i])
-
         mf = {}
 
-        if 1 in cf_list:
+        if 1 in cf:
             for n in range(self.number_nodes):
                 if cf[n] == 1:
                     node_charging = n
         else:
             node_charging = bottom_node + 1
-        if 1 in df_list:
+        if 1 in df:
             for n in range(self.number_nodes):
                 if df[n] == 1:
                     node_discharging = n
@@ -485,8 +475,7 @@ class HotWaterTank(object):
 
         return mass_ts
 
-    def coefficient_A(self, state, node, nodes_temp, mass_flow,
-                      source_temp, flow_temp):
+    def coefficient_A(self, state, node, nodes_temp, mass_flow, cf, df):
         node_mass = self.calc_node_mass()
 
         # specific heat at temperature of node i
@@ -503,9 +492,8 @@ class HotWaterTank(object):
         # correction factors
         Fi = self.correction_factors['insulation_factor']
         Fe = self.correction_factors['overall_factor']
-        Fd = self.discharging_function(state, nodes_temp, flow_temp, node)[node]
-        mf = self.mixing_function(state, node, nodes_temp,
-                                  source_temp, flow_temp)
+        Fd = df[node]
+        mf = self.mixing_function(state, node, cf, df)
         Fco = self.charging_top_node(state)[node]
 
         A = (- Fd * mass_flow * cp -
@@ -518,28 +506,24 @@ class HotWaterTank(object):
 
         return A
 
-    def coefficient_B(self, state, node, nodes_temp, mass_flow, source_temp,
-                      flow_temp):
+    def coefficient_B(self, state, node, mass_flow, cf, df):
 
         node_mass = self.calc_node_mass()
-        mf = self.mixing_function(state, node, nodes_temp,
-                                  source_temp, flow_temp)
+        mf = self.mixing_function(state, node, cf, df)
 
         B = mf['Fcnt'] * mass_flow / node_mass
 
         return B
 
-    def coefficient_C(self, state, node, nodes_temp, mass_flow, source_temp,
-                      flow_temp):
+    def coefficient_C(self, state, node, mass_flow, cf, df):
         node_mass = self.calc_node_mass()
-        mf = self.mixing_function(state, node, nodes_temp,
-                                  source_temp, flow_temp)
+        mf = self.mixing_function(state, node, cf, df)
 
         C = mf['Fdnb'] * mass_flow / node_mass
         return C
 
-    def coefficient_D(self, state, node, nodes_temp, mass_flow, source_temp,
-                      flow_temp, return_temp, timestep):
+    def coefficient_D(self, node, nodes_temp, mass_flow, source_temp,
+                      flow_temp, return_temp, timestep, cf, df):
 
         node_mass = self.calc_node_mass()
 
@@ -558,9 +542,8 @@ class HotWaterTank(object):
         Fi = self.correction_factors['insulation_factor']
         Fe = self.correction_factors['overall_factor']
 
-        Fc = self.charging_function(state, nodes_temp, source_temp, node)[node]
-        Fdi = self.discharging_bottom_node(
-            state, nodes_temp, return_temp, flow_temp)[node]
+        Fc = cf[node]
+        Fdi = self.discharging_bottom_node(nodes_temp, flow_temp, df)[node]
         Ta = self.amb_temp(timestep)
 
         cl = self.connection_losses()
@@ -585,19 +568,26 @@ class HotWaterTank(object):
         # this accounts for this and ensures not going over node mass
         mass_flow = min(mass_flow1, self.calc_node_mass())
 
-        c = []
-        for node in range(self.number_nodes):
-            coefficients = {'A': self.coefficient_A(
-                state, node, nodes_temp, mass_flow, source_temp, flow_temp),
-                            'B': self.coefficient_B(
-                state, node, nodes_temp, mass_flow, source_temp, flow_temp),
-                            'C': self.coefficient_C(
-                state, node, nodes_temp, mass_flow, source_temp, flow_temp),
-                            'D': self.coefficient_D(
-                state, node, nodes_temp, mass_flow, source_temp, flow_temp,
-                return_temp, timestep)}
-            c.append(coefficients)
-        return c
+        # Charging and discharging data
+        cf = self.charging_function(state, nodes_temp, source_temp)
+        df = self.discharging_function(state, nodes_temp, flow_temp)
+
+        # Initialize output list
+        out = list(range(self.number_nodes))
+        for idx, node in enumerate(range(self.number_nodes)):
+            coefficients = {
+                'A': self.coefficient_A(
+                    state, node, nodes_temp, mass_flow, cf, df),
+                'B': self.coefficient_B(
+                    state, node, mass_flow, cf, df),
+                'C': self.coefficient_C(
+                    state, node, mass_flow, cf, df),
+                'D': self.coefficient_D(
+                    node, nodes_temp, mass_flow, source_temp, flow_temp,
+                return_temp, timestep, cf, df)
+            }
+            out[idx] = coefficients
+        return out
 
     def new_nodes_temp(self, state, nodes_temp, source_temp,
                        source_delta_t, flow_temp, return_temp,
@@ -612,8 +602,8 @@ class HotWaterTank(object):
             return nodes_temp * len(nodes_temp)
 
         def model_temp(z, t, c):
-            dzdt = []
-            for node in range(self.number_nodes):
+            dzdt = list(range(self.number_nodes))
+            for idx, node in enumerate(range(self.number_nodes)):
 
                 if node == 0:
                     Ti = nodes_temp[node]
@@ -623,7 +613,7 @@ class HotWaterTank(object):
                             c[node]['C'] * Ti_b +
                             c[node]['D'])
 
-                    dzdt.append(dTdt)
+                    dzdt[idx] = dTdt
 
                 elif node == (self.number_nodes - 1):
                     Ti = nodes_temp[node]
@@ -633,7 +623,7 @@ class HotWaterTank(object):
                             c[node]['B'] * Ti_a +
                             c[node]['D'])
 
-                    dzdt.append(dTdt)
+                    dzdt[idx] = dTdt
 
                 else:
                     Ti = nodes_temp[node]
@@ -645,7 +635,7 @@ class HotWaterTank(object):
                             c[node]['C'] * Ti_b +
                             c[node]['D'])
 
-                    dzdt.append(dTdt)
+                    dzdt[idx] = dTdt
 
             return dzdt
 
@@ -653,9 +643,6 @@ class HotWaterTank(object):
         top = 0
         bottom = self.number_nodes - 1
 
-        # CHANGED FROM
-        # t = self.number_nodes - 1
-        # CHANGED TO
         mass_flow_tot = self.mass_flow_calc(
             state, flow_temp, return_temp,
             source_temp, source_delta_t, thermal_output, demand,
@@ -674,13 +661,7 @@ class HotWaterTank(object):
         thermal_output = thermal_output * 3600 / float(t)
         demand = demand * 3600 / float(t)
 
-        coefficients.append((self.set_of_coefficients(
-            state, nodes_temp, source_temp, source_delta_t, flow_temp,
-            return_temp, thermal_output, demand,
-            nodes_temp[bottom], nodes_temp[top], timestep)))
-
-        node_temp_list = []
-        # node_temp_list.append(nodes_temp)
+        node_temp_list = list(range(1, t+1))
 
         # solve ODE
         for i in range(1, t + 1):
@@ -688,24 +669,25 @@ class HotWaterTank(object):
             tspan = [i - 1, i]
             # solve for next step
             # new coefficients
-            coefficients.append((self.set_of_coefficients(
+            coefficients = (self.set_of_coefficients(
                 state, nodes_temp, source_temp, source_delta_t,
                 flow_temp, return_temp, thermal_output, demand,
-                nodes_temp[bottom], nodes_temp[top], timestep)))
+                nodes_temp[bottom], nodes_temp[top], timestep))
 
             z = odeint(
                 model_temp, nodes_temp, tspan,
-                args=(coefficients[i],))
+                args=(coefficients,))
 
             nodes_temp = z[1]
             nodes_temp = sorted(nodes_temp, reverse=True)
-            node_temp_list.append(nodes_temp)
+            node_temp_list[i-1] = nodes_temp
+
         return node_temp_list
 
-    def coefficient_A_max(self, state, node, nodes_temp, source_temp,
-                          flow_temp):
+    def coefficient_A_max(self, state, node, nodes_temp, cf, df):
 
         node_mass = self.calc_node_mass()
+        mass_flow = node_mass
 
         # specific heat at temperature of node i
         cp = self.specific_heat_water(nodes_temp[node])
@@ -722,13 +704,10 @@ class HotWaterTank(object):
         Fi = self.correction_factors['insulation_factor']
         Fe = self.correction_factors['overall_factor']
 
-        Fd = self.discharging_function(state, nodes_temp, flow_temp, node)[node]
-        mf = self.mixing_function(state, node, nodes_temp,
-                                  source_temp, flow_temp)
+        Fd = df[node]
+        mf = self.mixing_function(state, node, cf, df)
 
         Fco = self.charging_top_node(state)[node]
-
-        mass_flow = self.calc_node_mass()
 
         A = (- Fd * mass_flow * cp -
              mf['Fdnt'] * mass_flow * cp -
@@ -740,32 +719,29 @@ class HotWaterTank(object):
 
         return A
 
-    def coefficient_B_max(self, state, node, nodes_temp, source_temp,
-                          flow_temp):
+    def coefficient_B_max(self, state, node, cf, df):
 
         node_mass = self.calc_node_mass()
-        mf = self.mixing_function(state, node, nodes_temp,
-                                  source_temp, flow_temp)
-        mass_flow = self.calc_node_mass()
+        mass_flow = node_mass
+
+        mf = self.mixing_function(state, node, cf, df)
 
         B = mf['Fcnt'] * mass_flow / node_mass
 
         return B
 
-    def coefficient_C_max(self, state, node, nodes_temp, source_temp,
-                          flow_temp, timestep):
+    def coefficient_C_max(self, state, node, cf, df):
 
         node_mass = self.calc_node_mass()
-        mf = self.mixing_function(state, node, nodes_temp,
-                                  source_temp, flow_temp)
+        mf = self.mixing_function(state, node, cf, df)
         mass_flow = node_mass
 
         C = mf['Fdnb'] * mass_flow / node_mass
 
         return C
 
-    def coefficient_D_max(self, state, node, nodes_temp, source_temp,
-                          flow_temp, return_temp, timestep):
+    def coefficient_D_max(self, node, nodes_temp, source_temp,
+                          flow_temp, return_temp, timestep, cf, df):
 
         node_mass = self.calc_node_mass()
 
@@ -784,9 +760,8 @@ class HotWaterTank(object):
         Fi = self.correction_factors['insulation_factor']
         Fe = self.correction_factors['overall_factor']
 
-        Fc = self.charging_function(state, nodes_temp, source_temp)[node]
-        Fdi = self.discharging_bottom_node(
-            state, nodes_temp, return_temp, flow_temp)[node]
+        Fc = cf[node]
+        Fdi = self.discharging_bottom_node(nodes_temp, flow_temp, df)[node]
         Ta = self.amb_temp(timestep)
 
         cl = self.connection_losses()
@@ -804,19 +779,23 @@ class HotWaterTank(object):
     def set_of_max_coefficients(self, state, nodes_temp, source_temp,
                                 flow_temp, return_temp, timestep):
 
-        c = []
-        for node in range(self.number_nodes):
-            coefficients = {'A': self.coefficient_A_max(
-                state, node, nodes_temp, source_temp, flow_temp),
-                            'B': self.coefficient_B_max(
-                state, node, nodes_temp, source_temp, flow_temp),
-                            'C': self.coefficient_C_max(
-                state, node, nodes_temp, source_temp, flow_temp,
-                timestep),
-                            'D': self.coefficient_D_max(
-                state, node, nodes_temp, source_temp, flow_temp,
-                return_temp, timestep)}
-            c.append(coefficients)
+        c = list(range(self.number_nodes))
+
+        # Charging and discharging data
+        cf = self.charging_function(state, nodes_temp, source_temp)
+        df = self.discharging_function(state, nodes_temp, flow_temp)
+
+        for idx, node in enumerate(range(self.number_nodes)):
+            coefficients = {
+                'A': self.coefficient_A_max(
+                    state, node, nodes_temp, cf, df),
+                'B': self.coefficient_B_max(
+                    state, node, cf, df),
+                'C': self.coefficient_C_max(
+                    state, node, cf, df),
+                'D': self.coefficient_D_max(
+                    node, nodes_temp, source_temp, flow_temp, return_temp, timestep, cf, df)}
+            c[idx] = coefficients
         return c
 
     def max_energy_in_out(self, state, nodes_temp, source_temp,
@@ -839,8 +818,8 @@ class HotWaterTank(object):
             return 0.0
 
         def model_temp(z, t, c):
-            dzdt = []
-            for node in range(self.number_nodes):
+            dzdt = list(range(self.number_nodes))
+            for idx, node in enumerate(range(self.number_nodes)):
 
                 if node == 0:
                     Ti = nodes_temp[node]
@@ -850,7 +829,7 @@ class HotWaterTank(object):
                             c[node]['C'] * Ti_b +
                             c[node]['D'])
 
-                    dzdt.append(dTdt)
+                    dzdt[idx] = dTdt
 
                 elif node == (self.number_nodes - 1):
                     Ti = nodes_temp[node]
@@ -860,7 +839,7 @@ class HotWaterTank(object):
                             c[node]['B'] * Ti_a +
                             c[node]['D'])
 
-                    dzdt.append(dTdt)
+                    dzdt[idx] = dTdt
 
                 else:
                     Ti = nodes_temp[node]
@@ -872,7 +851,7 @@ class HotWaterTank(object):
                             c[node]['C'] * Ti_b +
                             c[node]['D'])
 
-                    dzdt.append(dTdt)
+                    dzdt[idx] = dTdt
 
             return dzdt
 
