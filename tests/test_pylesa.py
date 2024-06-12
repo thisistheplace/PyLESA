@@ -36,6 +36,7 @@ def temp_paths(fixed_order_input: Path, tmpdir: Path, csvpaths) -> List[Path]:
     return [tmpdir / runname / csvpth for csvpth in csvpaths]
 
 
+# @pytest.mark.skip(reason="A bit slow to keep re-running")
 class TestPylesa:
     # Test single core and multiprocessing run options
     @pytest.mark.parametrize("singlecore", [True, False])
