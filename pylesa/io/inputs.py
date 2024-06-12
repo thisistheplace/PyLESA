@@ -8,6 +8,7 @@ import pandas as pd
 
 from ..constants import INDIR
 from ..heat.enums import HP, ModelName, DataInput
+from ..storage.hot_water_tank import Insulation, AmbientLocation
 
 LOG = logging.getLogger(__name__)
 
@@ -330,8 +331,19 @@ class Inputs(object):
         ts = self.container['thermal_storage']
 
         capacity = ts['capacity'][0]
-        insulation = ts['insulation'][0]
-        location = ts['location'][0]
+
+        if ts['insulation'][0] not in Insulation:
+            msg = f"Hot water tank insulation '{ts['insulation'][0]}' is not one of {[_.value for _ in Insulation]}"
+            LOG.error(msg)
+            raise ValueError(msg)
+        insulation = Insulation.from_value(ts['insulation'][0].upper())
+
+        if ts['location'][0] not in AmbientLocation:
+            msg = f"Hot water tank ambient location '{ts['location'][0]}' is not one of {[_.value for _ in AmbientLocation]}"
+            LOG.error(msg)
+            raise ValueError(msg)        
+        location = AmbientLocation.from_value(ts['location'][0].upper())
+
         number_nodes = ts['number_nodes'][0]
 
         dimensions = {'height': ts['height'][0],

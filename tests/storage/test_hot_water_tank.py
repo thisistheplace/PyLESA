@@ -2,7 +2,7 @@ from dataclasses import dataclass
 import pytest
 from unittest.mock import patch, Mock
 
-from pylesa.storage.hot_water_tank import HotWaterTank, INSIDE
+from pylesa.storage.hot_water_tank import HotWaterTank, AmbientLocation, Insulation
 
 
 @dataclass
@@ -51,8 +51,8 @@ class CoeffSpec:
 def tank() -> HotWaterTank:
     return HotWaterTank(
         capacity=100,
-        insulation="polyurethane",
-        location=INSIDE,
+        insulation=Insulation.POLYURETHANE,
+        location=AmbientLocation.INSIDE,
         number_nodes=4,
         dimensions={"width": 5},  # height and insulation_thickness are overwritten!
         tank_openings={
@@ -66,6 +66,14 @@ def tank() -> HotWaterTank:
         correction_factors={"insulation_factor": 2.0, "overall_factor": 3.0},
         air_temperature=None,
     )
+
+
+class TestTank:
+    def test_init(self, tank: HotWaterTank):
+        assert isinstance(tank, HotWaterTank)
+
+    def test_node_mass(self, tank: HotWaterTank):
+        assert tank.calc_node_mass() == 100 / 4.0
 
 
 class TestCoefficients:
