@@ -4,6 +4,7 @@ lowest capacity is 100L, this can be used as
 "no" thermal storage simulation as long as demand is large
 """
 
+from enum import Enum
 from importlib.resources import files as ifiles
 import logging
 import pandas as pd
@@ -13,12 +14,27 @@ from typing import Dict, List
 from scipy.integrate import odeint
 
 from ..environment import weather
+from ..io.enums import SingleTypeCheck
 
 LOG = logging.getLogger(__name__)
 
-INSULATION_K = {"polyurethane": 0.025, "fibreglass": 0.04, "polystyrene": 0.035}
-INSIDE = "inside"
-OUTSIDE = "outside"
+
+class Insulation(str, Enum, metaclass=SingleTypeCheck):
+    POLYURETHANE = "POLYURETHANE"
+    FIBREGLASS = "FIBREGLASS"
+    POLYSTYRENE = "POLYSTYRENE"
+
+
+class AmbientLocation(str, Enum, metaclass=SingleTypeCheck):
+    INSIDE = "INSIDE"
+    OUTSIDE = "OUTSIDE"
+
+
+INSULATION_K = {
+    Insulation.POLYURETHANE: 0.025,
+    Insulation.FIBREGLASS: 0.04,
+    Insulation.POLYSTYRENE: 0.035,
+}
 
 
 class HotWaterTank(object):
@@ -26,8 +42,8 @@ class HotWaterTank(object):
     def __init__(
         self,
         capacity: float,
-        insulation: str,
-        location: str,
+        insulation: Insulation,
+        location: AmbientLocation,
         number_nodes: int,
         dimensions: Dict[str, float],
         tank_openings: Dict[str, float],
@@ -36,7 +52,7 @@ class HotWaterTank(object):
     ):
         """hot water tank class object
 
-        Arguments:
+        Args:
             capacity, capacity in L of tank
             insulation, type of insulation of tank
             location, outside or inside
@@ -49,15 +65,14 @@ class HotWaterTank(object):
                                     'insulated_connections'
                                     'insulated_connections_diameter'}
             correction_factors, insulation factor and overall factor
-
-        Keyword Arguments:
-            air_temperature, default: None
+            air_temperature, Dataframe containing "air_temperature" column defining
+                hourly air temperatures, default: None
         """
 
         # float or str inputs
         self.capacity = capacity
-        self.insulation = str(insulation).lower().strip()
-        self.location = str(location).lower().strip()
+        self.insulation = insulation
+        self.location = location
         self.number_nodes = number_nodes
         self.node_list = list(range(self.number_nodes))
 
@@ -88,20 +103,11 @@ class HotWaterTank(object):
         }
 
     def init_temps(self, initial_temp):
-        nodes_temp = []
-        for _ in range(self.number_nodes):
-            nodes_temp.append(initial_temp)
-        return nodes_temp
+        return [initial_temp for _ in range(self.number_nodes)]
 
-    def calc_node_mass(self):
-        """calculates the mass of one node
-
-        Returns:
-            float -- mass of one node kg
-        """
-
-        node_mass = float(self.capacity) / self.number_nodes
-        return node_mass
+    def calc_node_mass(self) -> float:
+        """Calculates the mass of one node in kg"""
+        return float(self.capacity) / self.number_nodes
 
     def insulation_k_value(self):
         """selects k for insulation
@@ -110,7 +116,7 @@ class HotWaterTank(object):
             float -- k-value of insulation W/mK
         """
         if not self.insulation in INSULATION_K:
-            msg = f"Insulation {self.insulation} is not valid, must be one of {INSULATION_K}"
+            msg = f"Insulation {self.insulation} is not valid, must be one of {list(INSULATION_K.keys())}"
             LOG.error(msg)
             raise ValueError(msg)
 
@@ -165,16 +171,16 @@ class HotWaterTank(object):
         Returns:
             float -- ambient temp surrounding tank degC
         """
-        if self.location == OUTSIDE:
+        if self.location == AmbientLocation.OUTSIDE:
 
             w = weather.Weather(air_temperature=self.air_temperature).hot_water_tank()
             ambient_temp = w["air_temperature"]["air_temperature"][timestep]
 
-        elif self.location == INSIDE:
+        elif self.location == AmbientLocation.INSIDE:
             ambient_temp = 15.0
 
         else:
-            msg = f"Location {self.location} not valid, must be one of [{INSIDE}, {OUTSIDE}]"
+            msg = f"Location {self.location} not valid, must be one of {[_.value for _ in AmbientLocation]}"
             LOG.error(msg)
             raise ValueError(msg)
         return ambient_temp
