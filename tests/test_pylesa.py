@@ -46,7 +46,7 @@ class TestPylesa:
         fixed_order_paths: List[Path],
         tmpdir: Path,
         temp_paths: List[Path],
-        singlecore: bool
+        singlecore: bool,
     ):
         # Load existing results, these are committed to the repo
         targets = []
