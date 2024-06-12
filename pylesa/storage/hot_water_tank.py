@@ -7,6 +7,7 @@ from importlib.resources import files as ifiles
 import logging
 import pandas as pd
 import math
+from typing import Dict, List
 
 from scipy.integrate import odeint
 
@@ -24,27 +25,27 @@ OUTSIDE = 'outside'
 
 class HotWaterTank(object):
 
-    def __init__(self, capacity, insulation, location, number_nodes,
-                 dimensions, tank_openings, correction_factors,
-                 air_temperature=None):
+    def __init__(self, capacity: float, insulation: str, location: str, number_nodes: int,
+                 dimensions: Dict[str, float], tank_openings: Dict[str, float], correction_factors: Dict[str, float],
+                 air_temperature: pd.DataFrame = None):
         """hot water tank class object
 
         Arguments:
-            capacity {float} -- capacity in L of tank
-            insulation {str} -- type of insulation of tank
-            location {str} -- outside or inside
-            number_nodes {int} -- number of nodes
-            dimensions {dict} -- {height, width, insul thickness}
-            tank_openings {dict} -- {'tank_opening'
+            capacity, capacity in L of tank
+            insulation, type of insulation of tank
+            location, outside or inside
+            number_nodes, number of nodes
+            dimensions, {height, width, insul thickness}
+            tank_openings, {'tank_opening'
                                     'tank_opening_diameter'
                                     'uninsulated_connections'
                                     'uninsulated_connections_diameter'
                                     'insulated_connections'
                                     'insulated_connections_diameter'}
-            correction_factors {dict} -- insulation factor and overall factor
+            correction_factors, insulation factor and overall factor
 
         Keyword Arguments:
-            air_temperature {dataframe} -- (default: {None})
+            air_temperature, default: None
         """
 
         # float or str inputs
@@ -173,13 +174,17 @@ class HotWaterTank(object):
             raise ValueError(msg)
         return ambient_temp
 
-    def discharging_function(self, state, nodes_temp, flow_temp, node = None):
+    def discharging_function(self, state: str, nodes_temp: List[float], flow_temp: float, node: int = None) -> List[int]:
         """Determine which nodes in the tank are discharging
 
+        If the in mass exceeds the node volume then next node also charged.
+
         Args:
+            state, "charging" or "discharging"
             total nodes, is the number of nodes being modelled
             nodes_temp, is a dict of the nodes and their temperatures
-            return_temp, is the temperature from the scheme going back into the storage
+            flow_temp, is the temperature from the storage going into the system
+            node, only run function for this node
 
         Returns:
             list of 1 (discharging) or 0
@@ -248,15 +253,17 @@ class HotWaterTank(object):
 
         return out
 
-    def charging_function(self, state, nodes_temp, source_temp, node = None):
-        """Determine which nodes in the tank are discharging
+    def charging_function(self, state: str, nodes_temp: List[float], source_temp: float, node: int = None) -> List[int]:
+        """Determine which nodes in the tank are charging
 
         If the in mass exceeds the node volume then next node also charged.
 
         Args:
+            state, "charging" or "discharging"
             total nodes, is the number of nodes being modelled
             nodes_temp, is a dict of the nodes and their temperatures
             source_temp, is the temperature from the source going into the storage
+            node, only run function for this node
 
         Returns:
             list of 1 (charging) or 0
@@ -447,35 +454,40 @@ class HotWaterTank(object):
                        source_temp, source_delta_t, thermal_output, demand,
                        temp_tank_bottom, temp_tank_top):
         if state == 'charging':
-            # max_mass_flow_cha = self.mass_flow_to_charge(
-            #     nodes_temp, source_temp,
-            #     flow_temp, return_temp, timestep)
             mass_ts = self.thermal_storage_mass_charging(
                 thermal_output, source_temp,
                 source_delta_t, return_temp, flow_temp,
                 demand, temp_tank_bottom)
-            # if mass >= max_mass_flow_cha:
-            #     mass_ts = max_mass_flow_cha
-            # elif mass < max_mass_flow_cha:
-            #     mass_ts = mass
-
         elif state == 'discharging':
-            # max_mass_flow_dis = self.mass_flow_to_discharge(
-            #     nodes_temp, source_temp,
-            #     flow_temp, return_temp, timestep)
             mass_ts = self.thermal_storage_mass_discharging(
                 thermal_output, source_temp, source_delta_t,
                 return_temp, flow_temp, demand, temp_tank_top)
-            # if mass >= max_mass_flow_dis:
-            #     mass_ts = max_mass_flow_dis
-            # elif mass < max_mass_flow_dis:
-            #     mass_ts = mass
         elif state == 'standby':
             mass_ts = 0
 
         return mass_ts
 
-    def coefficient_A(self, state, node, nodes_temp, mass_flow, cf, df):
+    def coefficient_A(self, 
+            state: str, 
+            node: int,
+            nodes_temp: List[float],
+            mass_flow: float,
+            cf: List[int],
+            df: List[int]
+        ):
+        """Calculate coefficient A
+        
+        Args:
+            state, 'charging' or 'discharging'
+            node, index in nodes_temp list to calculate coefficient for
+            nodes_temp, list of nodal temperatures
+            mass_flow, mass flow rate
+            cf, list of nodes where value of 1 is charging
+            df, list of nodes where value of 1 is discharging
+        
+        Returns:
+            Value of coefficient A
+        """
         node_mass = self.calc_node_mass()
 
         # specific heat at temperature of node i
@@ -568,6 +580,18 @@ class HotWaterTank(object):
         # this accounts for this and ensures not going over node mass
         mass_flow = min(mass_flow1, self.calc_node_mass())
 
+        return self._set_of_coefficients(state, nodes_temp, source_temp,
+                                flow_temp, return_temp, timestep, mass_flow)
+
+    def set_of_max_coefficients(self, state, nodes_temp, source_temp,
+                                flow_temp, return_temp, timestep):
+        # Mass flow rate
+        node_mass = self.calc_node_mass()
+        return self._set_of_coefficients(state, nodes_temp, source_temp,
+                                flow_temp, return_temp, timestep, node_mass)
+    
+    def _set_of_coefficients(self, state, nodes_temp, source_temp,
+                                flow_temp, return_temp, timestep, mass_flow):
         # Charging and discharging data
         cf = self.charging_function(state, nodes_temp, source_temp)
         df = self.discharging_function(state, nodes_temp, flow_temp)
@@ -583,9 +607,7 @@ class HotWaterTank(object):
                 'C': self.coefficient_C(
                     state, node, mass_flow, cf, df),
                 'D': self.coefficient_D(
-                    node, nodes_temp, mass_flow, source_temp, flow_temp,
-                return_temp, timestep, cf, df)
-            }
+                    node, nodes_temp, mass_flow, source_temp, flow_temp, return_temp, timestep, cf, df)}
             out[idx] = coefficients
         return out
 
@@ -683,120 +705,6 @@ class HotWaterTank(object):
             node_temp_list[i-1] = nodes_temp
 
         return node_temp_list
-
-    def coefficient_A_max(self, state, node, nodes_temp, cf, df):
-
-        node_mass = self.calc_node_mass()
-        mass_flow = node_mass
-
-        # specific heat at temperature of node i
-        cp = self.specific_heat_water(nodes_temp[node])
-
-        # thermal conductivity of insulation material
-        k = self.insulation_k_value()
-
-        # dimensions
-        r1 = self.internal_radius()
-        r2 = self.dimensions['width']
-        h = self.dimensions['height']
-
-        # correction factors
-        Fi = self.correction_factors['insulation_factor']
-        Fe = self.correction_factors['overall_factor']
-
-        Fd = df[node]
-        mf = self.mixing_function(state, node, cf, df)
-
-        Fco = self.charging_top_node(state)[node]
-
-        A = (- Fd * mass_flow * cp -
-             mf['Fdnt'] * mass_flow * cp -
-             mf['Fcnb'] * mass_flow * cp -
-             Fco * mass_flow * cp -
-             Fe * Fi * k * ((1) / (r2 - r1)) *
-             math.pi * ((r1 ** 2) + h * (r2 + r1))
-             ) / (node_mass * cp)
-
-        return A
-
-    def coefficient_B_max(self, state, node, cf, df):
-
-        node_mass = self.calc_node_mass()
-        mass_flow = node_mass
-
-        mf = self.mixing_function(state, node, cf, df)
-
-        B = mf['Fcnt'] * mass_flow / node_mass
-
-        return B
-
-    def coefficient_C_max(self, state, node, cf, df):
-
-        node_mass = self.calc_node_mass()
-        mf = self.mixing_function(state, node, cf, df)
-        mass_flow = node_mass
-
-        C = mf['Fdnb'] * mass_flow / node_mass
-
-        return C
-
-    def coefficient_D_max(self, node, nodes_temp, source_temp,
-                          flow_temp, return_temp, timestep, cf, df):
-
-        node_mass = self.calc_node_mass()
-
-        # specific heat at temperature of node i
-        cp = self.specific_heat_water(nodes_temp[node])
-
-        # thermal conductivity of insulation material
-        k = self.insulation_k_value()
-
-        # dimensions
-        r1 = self.internal_radius()
-        r2 = self.dimensions['width']
-        h = self.dimensions['height']
-
-        # correction factors
-        Fi = self.correction_factors['insulation_factor']
-        Fe = self.correction_factors['overall_factor']
-
-        Fc = cf[node]
-        Fdi = self.discharging_bottom_node(nodes_temp, flow_temp, df)[node]
-        Ta = self.amb_temp(timestep)
-
-        cl = self.connection_losses()
-
-        mass_flow = node_mass
-
-        D = (Fc * mass_flow * cp * source_temp +
-             Fdi * mass_flow * cp * return_temp +
-             Fe * Fi * k * ((Ta) / (r2 - r1)) * math.pi *
-             ((r1 ** 2) + h * (r2 + r1)) + Fe * cl
-             ) / (node_mass * cp)
-
-        return D
-
-    def set_of_max_coefficients(self, state, nodes_temp, source_temp,
-                                flow_temp, return_temp, timestep):
-
-        c = list(range(self.number_nodes))
-
-        # Charging and discharging data
-        cf = self.charging_function(state, nodes_temp, source_temp)
-        df = self.discharging_function(state, nodes_temp, flow_temp)
-
-        for idx, node in enumerate(range(self.number_nodes)):
-            coefficients = {
-                'A': self.coefficient_A_max(
-                    state, node, nodes_temp, cf, df),
-                'B': self.coefficient_B_max(
-                    state, node, cf, df),
-                'C': self.coefficient_C_max(
-                    state, node, cf, df),
-                'D': self.coefficient_D_max(
-                    node, nodes_temp, source_temp, flow_temp, return_temp, timestep, cf, df)}
-            c[idx] = coefficients
-        return c
 
     def max_energy_in_out(self, state, nodes_temp, source_temp,
                           flow_temp, return_temp, timestep):
