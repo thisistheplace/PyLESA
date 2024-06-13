@@ -90,51 +90,46 @@ class HotWaterTank(object):
             temp: cp * 1000 for (temp, cp) in zip(self.cp_spec["t"], self.cp_spec["Cp"])
         }
 
-    def init_temps(self, initial_temp):
+    def init_temps(self, initial_temp) -> List[float]:
+        """Returns list of initial temperature for each node"""
         return [initial_temp for _ in range(self.number_nodes)]
 
     def calc_node_mass(self) -> float:
         """Calculates the mass of one node in kg"""
         return float(self.capacity) / self.number_nodes
 
-    def insulation_k_value(self):
-        """selects k for insulation
-
-        Returns:
-            float -- k-value of insulation W/mK
-        """
+    def insulation_k_value(self) -> float:
+        """Returns k value of insulation in W/mK"""
         if not self.insulation in INSULATION_K:
             msg = f"Insulation {self.insulation} is not valid, must be one of {list(INSULATION_K.keys())}"
             LOG.error(msg)
-            raise ValueError(msg)
+            raise KeyError(msg)
 
         # units of k need to be adjusted from W to joules
         # over the hour, and this requires
-        # minuts in hour * seconds in minute (60*60)
+        # minutes in hour * seconds in minute (60*60)
         return INSULATION_K[self.insulation] * 3600
 
-    def specific_heat_water(self, temp):
-        """cp of water
+    def specific_heat_water(self, temp: float) -> float:
+        """Specific heat of water
 
-        Arguments:
-            temp {float} -- temperature of water
+        Args:
+            temp, temperature of water
 
         Returns:
-            float -- cp of water at given temp - j/(kg deg C)
+            Cp of water at given temp - j/(kg deg C)
         """
         # input temp must be between 0 and 100 deg
         if isinstance(temp, (int, float)):
-            if 100.0 >= temp >= 0.0:
+            if 0. <= temp <= 100.0:
                 T = round(float(temp), -1)
-                cp = self.cp[T]
+                return self.cp[T]
             else:
                 msg = f"Water temperature {temp} is outside of allowable range of 0<=temp<=100"
                 LOG.error(msg)
                 raise ValueError(msg)
         else:
-            cp = 4180
-
-        return cp
+            return 4180
 
     def internal_radius(self):
         """calculates internal radius
