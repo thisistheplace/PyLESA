@@ -90,14 +90,17 @@ class HotWaterTank(object):
             temp: cp * 1000 for (temp, cp) in zip(self.cp_spec["t"], self.cp_spec["Cp"])
         }
 
-    def init_temps(self, initial_temp) -> List[float]:
-        """Returns list of initial temperature for each node"""
-        return [initial_temp for _ in range(self.number_nodes)]
-
-    def calc_node_mass(self) -> float:
+    @property
+    def node_mass(self) -> float:
         """Calculates the mass of one node in kg"""
         return float(self.capacity) / self.number_nodes
 
+    @property
+    def internal_radius(self) -> float:
+        """Calculates internal radius in m"""
+        return self.dimensions["width"] - self.dimensions["insulation_thickness"]
+
+    @property
     def insulation_k_value(self) -> float:
         """Returns k value of insulation in W/mK"""
         if not self.insulation in INSULATION_K:
@@ -110,6 +113,10 @@ class HotWaterTank(object):
         # minutes in hour * seconds in minute (60*60)
         return INSULATION_K[self.insulation] * 3600
 
+    def init_temps(self, initial_temp) -> List[float]:
+        """Returns list of initial temperature for each node"""
+        return [initial_temp for _ in range(self.number_nodes)]
+
     def specific_heat_water(self, temp: float) -> float:
         """Specific heat of water
 
@@ -121,7 +128,7 @@ class HotWaterTank(object):
         """
         # input temp must be between 0 and 100 deg
         if isinstance(temp, (int, float)):
-            if 0. <= temp <= 100.0:
+            if 0.0 <= temp <= 100.0:
                 T = round(float(temp), -1)
                 return self.cp[T]
             else:
@@ -130,16 +137,6 @@ class HotWaterTank(object):
                 raise ValueError(msg)
         else:
             return 4180
-
-    def internal_radius(self):
-        """calculates internal radius
-
-        Returns:
-            float -- internal radius, m
-        """
-
-        r1 = self.dimensions["width"] - self.dimensions["insulation_thickness"]
-        return r1
 
     def amb_temp(self, timestep):
         """ambient temperature surrounding tank
@@ -518,16 +515,14 @@ class HotWaterTank(object):
         Returns:
             Value of coefficient A
         """
-        node_mass = self.calc_node_mass()
-
         # specific heat at temperature of node i
         cp = self.specific_heat_water(nodes_temp[node])
 
         # thermal conductivity of insulation material
-        k = self.insulation_k_value()
+        k = self.insulation_k_value
 
         # dimensions
-        r1 = self.internal_radius()
+        r1 = self.internal_radius
         r2 = self.dimensions["width"]
         h = self.dimensions["height"]
 
@@ -544,25 +539,17 @@ class HotWaterTank(object):
             - mf["Fcnb"] * mass_flow * cp
             - Fco * mass_flow * cp
             - Fe * Fi * k * ((1) / (r2 - r1)) * math.pi * ((r1**2) + h * (r2 + r1))
-        ) / (node_mass * cp)
+        ) / (self.node_mass * cp)
 
         return A
 
     def coefficient_B(self, state, node, mass_flow, cf, df):
-
-        node_mass = self.calc_node_mass()
         mf = self.mixing_function(state, node, cf, df)
-
-        B = mf["Fcnt"] * mass_flow / node_mass
-
-        return B
+        return mf["Fcnt"] * mass_flow / self.node_mass
 
     def coefficient_C(self, state, node, mass_flow, cf, df):
-        node_mass = self.calc_node_mass()
         mf = self.mixing_function(state, node, cf, df)
-
-        C = mf["Fdnb"] * mass_flow / node_mass
-        return C
+        return mf["Fdnb"] * mass_flow / self.node_mass
 
     def coefficient_D(
         self,
@@ -576,17 +563,14 @@ class HotWaterTank(object):
         cf,
         df,
     ):
-
-        node_mass = self.calc_node_mass()
-
         # specific heat at temperature of node i
         cp = self.specific_heat_water(nodes_temp[node])
 
         # thermal conductivity of insulation material
-        k = self.insulation_k_value()
+        k = self.insulation_k_value
 
         # dimensions
-        r1 = self.internal_radius()
+        r1 = self.internal_radius
         r2 = self.dimensions["width"]
         h = self.dimensions["height"]
 
@@ -605,7 +589,7 @@ class HotWaterTank(object):
             + Fdi * mass_flow * cp * return_temp
             + Fe * Fi * k * ((Ta) / (r2 - r1)) * math.pi * ((r1**2) + h * (r2 + r1))
             + Fe * cl
-        ) / (node_mass * cp)
+        ) / (self.node_mass * cp)
 
         return D
 
@@ -637,7 +621,7 @@ class HotWaterTank(object):
         )
         # errors may lead to slight overestimation of maximum mass flow
         # this accounts for this and ensures not going over node mass
-        mass_flow = min(mass_flow1, self.calc_node_mass())
+        mass_flow = min(mass_flow1, self.node_mass)
 
         return self._set_of_coefficients(
             state, nodes_temp, source_temp, flow_temp, return_temp, timestep, mass_flow
@@ -647,9 +631,14 @@ class HotWaterTank(object):
         self, state, nodes_temp, source_temp, flow_temp, return_temp, timestep
     ):
         # Mass flow rate
-        node_mass = self.calc_node_mass()
         return self._set_of_coefficients(
-            state, nodes_temp, source_temp, flow_temp, return_temp, timestep, node_mass
+            state,
+            nodes_temp,
+            source_temp,
+            flow_temp,
+            return_temp,
+            timestep,
+            self.node_mass,
         )
 
     def _set_of_coefficients(
@@ -764,7 +753,7 @@ class HotWaterTank(object):
             * 3600
         )
         # number of internal timesteps function of node mass and charging/dis mass
-        t_ = math.ceil((mass_flow_tot / self.calc_node_mass()))
+        t_ = math.ceil((mass_flow_tot / self.node_mass))
         # maximum internal timesteps is the number of nodes
         t = min(self.number_nodes, t_)
         # minimum internal timesteps is 1
@@ -872,17 +861,18 @@ class HotWaterTank(object):
         )
 
         energy_list = []
-        mass_flow = self.calc_node_mass()
         cp = self.specific_heat_water(source_temp)
 
         # solve ODE
         for i in range(1, t + 1):
             if state == "charging" and source_temp > nodes_temp[self.number_nodes - 1]:
                 energy = (
-                    mass_flow * cp * (source_temp - nodes_temp[self.number_nodes - 1])
+                    self.node_mass
+                    * cp
+                    * (source_temp - nodes_temp[self.number_nodes - 1])
                 )
             elif state == "discharging" and nodes_temp[0] > flow_temp:
-                energy = mass_flow * cp * (nodes_temp[0] - return_temp)
+                energy = self.node_mass * cp * (nodes_temp[0] - return_temp)
             else:
                 energy = 0
             energy_list.append(energy)

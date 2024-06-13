@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import math
 import pytest
 from unittest.mock import patch, Mock
 
@@ -33,7 +34,7 @@ class CoeffSpec:
 
     @property
     def mass_flow(self):
-        return self.tank.calc_node_mass()
+        return self.tank.node_mass
 
     @property
     def nodes_temp(self):
@@ -74,15 +75,15 @@ class TestTank:
         assert isinstance(tank, HotWaterTank)
 
     def test_node_mass(self, tank: HotWaterTank):
-        assert tank.calc_node_mass() == 100 / 4.0
+        assert tank.node_mass == 100 / 4.0
 
     def test_insulation_k_value(self, tank: HotWaterTank):
-        assert tank.insulation_k_value() == 0.025 * 3600
+        assert tank.insulation_k_value == 0.025 * 3600
 
     def test_insulation_k_value_error(self, tank: HotWaterTank):
         tank.insulation = "bad"
         with pytest.raises(KeyError):
-            tank.insulation_k_value()
+            tank.insulation_k_value
 
     def test_specific_heat(self, tank: HotWaterTank):
         # test values from Isobaric Cp here:
@@ -96,6 +97,11 @@ class TestTank:
     def test_specific_heat_bad_temp(self, tank: HotWaterTank, temp: float):
         with pytest.raises(ValueError):
             tank.specific_heat_water(temp)
+
+    def test_internal_radius(self, tank: HotWaterTank):
+        assert tank.internal_radius == (
+            2 * (tank.capacity / (2.5 * math.pi)) ** (1.0 / 3)
+        ) * (7 / 8)
 
 
 class TestCoefficients:
@@ -119,7 +125,7 @@ class TestCoefficients:
         self, mock_mass_flow: Mock, spec: CoeffSpec, tank: HotWaterTank
     ):
         # Mock mass_flow_calc to return the same value as node mass
-        mock_mass_flow.return_value = tank.calc_node_mass()
+        mock_mass_flow.return_value = tank.node_mass
 
         assert tank.set_of_max_coefficients(
             spec.state,
