@@ -76,6 +76,27 @@ class TestTank:
     def test_node_mass(self, tank: HotWaterTank):
         assert tank.calc_node_mass() == 100 / 4.0
 
+    def test_insulation_k_value(self, tank: HotWaterTank):
+        assert tank.insulation_k_value() == 0.025 * 3600
+
+    def test_insulation_k_value_error(self, tank: HotWaterTank):
+        tank.insulation = "bad"
+        with pytest.raises(KeyError):
+            tank.insulation_k_value()
+
+    def test_specific_heat(self, tank: HotWaterTank):
+        # test values from Isobaric Cp here:
+        # https://www.engineeringtoolbox.com/specific-heat-capacity-water-d_660.html
+        assert round(tank.specific_heat_water(100), 0) == 4216.0
+        assert round(tank.specific_heat_water(70), 0) == 4190.0
+        assert round(tank.specific_heat_water(60), 0) == 4185.0
+        assert round(tank.specific_heat_water("default")) == 4180.0
+
+    @pytest.mark.parametrize("temp", [-1.0, 101.0])
+    def test_specific_heat_bad_temp(self, tank: HotWaterTank, temp: float):
+        with pytest.raises(ValueError):
+            tank.specific_heat_water(temp)
+
 
 class TestCoefficients:
     @pytest.fixture
