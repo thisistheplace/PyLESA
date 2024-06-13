@@ -2,7 +2,8 @@ from dataclasses import dataclass
 import pytest
 from unittest.mock import patch, Mock
 
-from pylesa.storage.hot_water_tank import HotWaterTank, AmbientLocation, Insulation
+from pylesa.storage.enums import AmbientLocation, Insulation
+from pylesa.storage.hot_water_tank import HotWaterTank
 
 
 @dataclass
