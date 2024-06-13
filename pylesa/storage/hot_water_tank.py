@@ -4,7 +4,6 @@ lowest capacity is 100L, this can be used as
 "no" thermal storage simulation as long as demand is large
 """
 
-from enum import Enum
 from importlib.resources import files as ifiles
 import logging
 import pandas as pd
@@ -13,21 +12,10 @@ from typing import Dict, List
 
 from scipy.integrate import odeint
 
+from .enums import Insulation, AmbientLocation
 from ..environment import weather
-from ..io.enums import SingleTypeCheck
 
 LOG = logging.getLogger(__name__)
-
-
-class Insulation(str, Enum, metaclass=SingleTypeCheck):
-    POLYURETHANE = "POLYURETHANE"
-    FIBREGLASS = "FIBREGLASS"
-    POLYSTYRENE = "POLYSTYRENE"
-
-
-class AmbientLocation(str, Enum, metaclass=SingleTypeCheck):
-    INSIDE = "INSIDE"
-    OUTSIDE = "OUTSIDE"
 
 
 INSULATION_K = {

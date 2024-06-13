@@ -5,11 +5,6 @@ from pylesa.heat.enums import HP, ModelName, DataInput
 from pylesa.io.enums import SingleTypeCheck
 
 
-class Dummy(str, Enum, metaclass=SingleTypeCheck):
-    FIRST = "first"
-    SECOND = "second"
-
-
 class TestHP:
     def test_metaclass(self):
         assert isinstance(HP, SingleTypeCheck)
