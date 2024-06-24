@@ -103,6 +103,17 @@ class TestTank:
             2 * (tank.capacity / (2.5 * math.pi)) ** (1.0 / 3)
         ) * (7 / 8)
 
+    def test_inside_ambient_temp(self, tank: HotWaterTank):
+        assert tank.amb_temp(0) == 15.0
+
+
+class TestOutside:
+    def test_outside_missing_air_temp(self):
+        pass
+
+    def test_outside_ambient_temp(self):
+        pass
+
 
 class TestCoefficients:
     @pytest.fixture
