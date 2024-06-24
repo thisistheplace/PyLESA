@@ -79,6 +79,11 @@ class HotWaterTank(object):
         self.correction_factors = correction_factors
 
         # optional input, needed if location is set to outside
+        if location == AmbientLocation.OUTSIDE and air_temperature is None:
+            msg = f"Air temperature must be provided if location={AmbientLocation.OUTSIDE}"
+            LOG.error(msg)
+            raise ValueError(msg)
+
         self.air_temperature = air_temperature
 
         self.cp_spec = pd.read_pickle(
