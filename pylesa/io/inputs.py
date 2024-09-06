@@ -332,17 +332,19 @@ class Inputs(object):
 
         capacity = ts['capacity'][0]
 
-        if ts['insulation'][0] not in Insulation:
-            msg = f"Hot water tank insulation '{ts['insulation'][0]}' is not one of {[_.value for _ in Insulation]}"
+        insulation_name = ts['insulation'][0].upper().strip()
+        if insulation_name not in Insulation:
+            msg = f"Hot water tank insulation '{insulation_name}' is not one of {[_.value for _ in Insulation]}"
             LOG.error(msg)
             raise ValueError(msg)
-        insulation = Insulation.from_value(ts['insulation'][0].upper())
+        insulation = Insulation.from_value(insulation_name)
 
-        if ts['location'][0] not in AmbientLocation:
-            msg = f"Hot water tank ambient location '{ts['location'][0]}' is not one of {[_.value for _ in AmbientLocation]}"
+        location_name = ts['location'][0].upper().strip()
+        if location_name not in AmbientLocation:
+            msg = f"Hot water tank ambient location '{location_name}' is not one of {[_.value for _ in AmbientLocation]}"
             LOG.error(msg)
             raise ValueError(msg)        
-        location = AmbientLocation.from_value(ts['location'][0].upper())
+        location = AmbientLocation.from_value(location_name)
 
         number_nodes = ts['number_nodes'][0]
 
