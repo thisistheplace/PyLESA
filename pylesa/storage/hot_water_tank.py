@@ -8,7 +8,7 @@ from importlib.resources import files as ifiles
 import logging
 import pandas as pd
 import math
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 from scipy.integrate import odeint
 
@@ -682,27 +682,7 @@ class HotWaterTank(object):
             out[idx] = coefficients
         return out
 
-    def new_nodes_temp(
-        self,
-        state,
-        nodes_temp,
-        source_temp,
-        source_delta_t,
-        flow_temp,
-        return_temp,
-        thermal_output,
-        demand,
-        timestep,
-    ):
-        if self.capacity == 0:
-            return nodes_temp
-
-        check = 0.0
-        for node in range(len(nodes_temp)):
-            check += nodes_temp[node]
-        if check == source_temp * len(nodes_temp) and state == "charging":
-            return nodes_temp * len(nodes_temp)
-
+    def _model_temp(self, nodes_temp: List[float]) -> Callable:
         def model_temp(z, t, c):
             dzdt = list(range(self.number_nodes))
             for idx, node in enumerate(range(self.number_nodes)):
@@ -738,6 +718,28 @@ class HotWaterTank(object):
                     dzdt[idx] = dTdt
 
             return dzdt
+        return model_temp
+
+    def new_nodes_temp(
+        self,
+        state,
+        nodes_temp,
+        source_temp,
+        source_delta_t,
+        flow_temp,
+        return_temp,
+        thermal_output,
+        demand,
+        timestep,
+    ):
+        if self.capacity == 0:
+            return nodes_temp
+
+        check = 0.0
+        for node in range(len(nodes_temp)):
+            check += nodes_temp[node]
+        if check == source_temp * len(nodes_temp) and state == "charging":
+            return nodes_temp * len(nodes_temp)
 
         # node indexes
         top = 0
@@ -793,7 +795,7 @@ class HotWaterTank(object):
                 timestep,
             )
 
-            z = odeint(model_temp, nodes_temp, tspan, args=(coefficients,))
+            z = odeint(self._model_temp(nodes_temp), nodes_temp, tspan, args=(coefficients,))
 
             nodes_temp = z[1]
             nodes_temp = sorted(nodes_temp, reverse=True)
@@ -815,42 +817,6 @@ class HotWaterTank(object):
 
         if self.capacity == 0:
             return 0.0
-
-        def model_temp(z, t, c):
-            dzdt = list(range(self.number_nodes))
-            for idx, node in enumerate(range(self.number_nodes)):
-
-                if node == 0:
-                    Ti = nodes_temp[node]
-                    Ti_b = nodes_temp[node + 1]
-
-                    dTdt = c[node]["A"] * Ti + c[node]["C"] * Ti_b + c[node]["D"]
-
-                    dzdt[idx] = dTdt
-
-                elif node == (self.number_nodes - 1):
-                    Ti = nodes_temp[node]
-                    Ti_a = nodes_temp[node - 1]
-
-                    dTdt = c[node]["A"] * Ti + c[node]["B"] * Ti_a + c[node]["D"]
-
-                    dzdt[idx] = dTdt
-
-                else:
-                    Ti = nodes_temp[node]
-                    Ti_b = nodes_temp[node + 1]
-                    Ti_a = nodes_temp[node - 1]
-
-                    dTdt = (
-                        c[node]["A"] * Ti
-                        + c[node]["B"] * Ti_a
-                        + c[node]["C"] * Ti_b
-                        + c[node]["D"]
-                    )
-
-                    dzdt[idx] = dTdt
-
-            return dzdt
 
         # number of time points
         t = self.number_nodes - 1
@@ -893,7 +859,7 @@ class HotWaterTank(object):
                 )
             )
 
-            z = odeint(model_temp, nodes_temp, tspan, args=(coefficients[i],))
+            z = odeint(self._model_temp(nodes_temp), nodes_temp, tspan, args=(coefficients[i],))
             nodes_temp = z[1]
 
         # convert J to kWh by divide by 3600000
