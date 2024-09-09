@@ -459,7 +459,7 @@ class Plot(object):
             charging_total[first_hour:final_hour],
             'r', linewidth=1)
         plt.ylabel('Energy (kWh)')
-        plt.legend(['Charging'], loc='best')
+        plt.legend([ChargingState.CHARGING], loc='best')
         plt.title('Thermal storage')
 
         # Plot stack of RES generation
@@ -469,7 +469,7 @@ class Plot(object):
             discharging_total[first_hour:final_hour],
             'b', linewidth=1)
         plt.ylabel('Energy (kWh)')
-        plt.legend(['Discharging'], loc='best')
+        plt.legend([ChargingState.DISCHARGING], loc='best')
 
         # Plot stack of RES usage
         plt.subplot(3, 1, 3)

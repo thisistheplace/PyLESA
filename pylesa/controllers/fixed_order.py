@@ -19,6 +19,7 @@ from ..io import inputs
 from ..constants import OUTDIR
 from ..heat.models import PerformanceValue
 from ..heat.enums import Fuel
+from ..storage.enums import ChargingState
 
 LOG = logging.getLogger(__name__)
 
@@ -266,11 +267,11 @@ class FixedOrder(object):
             # check if charging or discharging
             ts_match = checks['ts_charge'] - checks['ts_discharge']
             if ts_match > 0:
-                state = 'charging'
+                state = ChargingState.CHARGING
             elif ts_match < 0:
-                state = 'discharging'
+                state = ChargingState.DISCHARGING
             elif ts_match == 0:
-                state = 'standby'
+                state = ChargingState.STANDBY
             thermal_output = (
                 results['HP']['heat_total_output'] +
                 results['aux']['demand'])
@@ -344,7 +345,7 @@ class FixedOrder(object):
             # original hp usage and minimum output
             HP_increase = min_out - hp_usage
             # what if not enough space in thermal store
-            state = 'charging'
+            state = ChargingState.CHARGING
             tank_charge_left = (self.myHotWaterTank.max_energy_in_out(
                 state, nodes_temp, source_temp,
                 flow_temp, self.return_temp, timestep) +
@@ -385,7 +386,7 @@ class FixedOrder(object):
                 else:
                     # update new nodes temperatures
                     # check if charging or discharging
-                    state = 'discharging'
+                    state = ChargingState.DISCHARGING
                     thermal_output = 0.0
                     next_nodes_temp = self.myHotWaterTank.new_nodes_temp(
                         state, nodes_temp, source_temp, self.source_delta_t,
@@ -420,11 +421,11 @@ class FixedOrder(object):
                     # check if charging or discharging
                     ts_match += HP_increase
                     if ts_match > 0:
-                        state = 'charging'
+                        state = ChargingState.CHARGING
                     elif ts_match < 0:
-                        state = 'discharging'
+                        state = ChargingState.DISCHARGING
                     elif ts_match == 0:
-                        state = 'standby'
+                        state = ChargingState.STANDBY
                     thermal_output = results['HP']['heat_total_output']
                     next_nodes_temp = self.myHotWaterTank.new_nodes_temp(
                         state, nodes_temp, source_temp, self.source_delta_t,
@@ -537,11 +538,11 @@ class FixedOrder(object):
             # check if charging or discharging
             ts_match = round(checks['ts_charge'] - checks['ts_discharge'], 1)
             if ts_match > 0:
-                state = 'charging'
+                state = ChargingState.CHARGING
             elif ts_match < 0:
-                state = 'discharging'
+                state = ChargingState.DISCHARGING
             elif ts_match == 0:
-                state = 'standby'
+                state = ChargingState.STANDBY
             thermal_output = (
                 results['HP']['heat_total_output'] +
                 results['aux']['demand'])
@@ -620,7 +621,7 @@ class FixedOrder(object):
             HP_increase = min_out - hp_usage
             # what if not enough space in thermal store
             # remove the existing charging/discharging
-            state = 'charging'
+            state = ChargingState.CHARGING
             tank_charge_left = (self.myHotWaterTank.max_energy_in_out(
                 state, nodes_temp, source_temp, flow_temp,
                 self.return_temp, timestep) +
@@ -663,7 +664,7 @@ class FixedOrder(object):
                 # discharge from the TS to meet demand
                 results['TS']['discharging_total'] = min(
                     self.myHotWaterTank.max_energy_in_out(
-                        'discharging', nodes_temp, source_temp,
+                        ChargingState.DISCHARGING, nodes_temp, source_temp,
                         flow_temp, self.return_temp, timestep),
                     heat_demand)
 
@@ -672,7 +673,7 @@ class FixedOrder(object):
                 else:
                     # update new nodes temperatures
                     # check if charging or discharging
-                    state = 'discharging'
+                    state = ChargingState.DISCHARGING
                     thermal_output = 0.0
                     heat_demand = results['TS']['discharging_total']
                     next_nodes_temp = self.myHotWaterTank.new_nodes_temp(
@@ -708,11 +709,11 @@ class FixedOrder(object):
                     # check if charging or discharging
                     ts_match += HP_increase
                     if ts_match > 0:
-                        state = 'charging'
+                        state = ChargingState.CHARGING
                     elif ts_match < 0:
-                        state = 'discharging'
+                        state = ChargingState.DISCHARGING
                     elif ts_match == 0:
-                        state = 'standby'
+                        state = ChargingState.STANDBY
                     thermal_output = results['HP']['heat_total_output']
                     next_nodes_temp = self.myHotWaterTank.new_nodes_temp(
                         state, nodes_temp, source_temp, self.source_delta_t,
@@ -1108,7 +1109,7 @@ class FixedOrder(object):
 
         # discharge from thermal storage to try meet heat demand
         # max discharge energy from tank
-        state = 'discharging'
+        state = ChargingState.DISCHARGING
         max_dis = self.myHotWaterTank.max_energy_in_out(
             state, nodes_temp, source_temp,
             flow_temp,
@@ -1159,7 +1160,7 @@ class FixedOrder(object):
         hp_max_RES = RES_left * hp_performance.cop
         hp_left = min(hp_cap_left, hp_max_RES)
         # how much can be input into the hot water tank
-        state = 'charging'
+        state = ChargingState.CHARGING
         tank_charge_left = self.myHotWaterTank.max_energy_in_out(
             state, nodes_temp, source_temp,
             flow_temp,
@@ -1180,7 +1181,7 @@ class FixedOrder(object):
         if self.myAux.fuel == Fuel.ELECTRIC:
 
             # how much can be input into the hot water tank
-            state = 'charging'
+            state = ChargingState.CHARGING
             tank_charge_left = self.myHotWaterTank.max_energy_in_out(
                 state, nodes_temp, source_temp,
                 flow_temp,
@@ -1205,7 +1206,7 @@ class FixedOrder(object):
             hp_performance.duty -
             hp_usage)
         # spare tank capacity
-        state = 'charging'
+        state = ChargingState.CHARGING
         tank_charge_left = self.myHotWaterTank.max_energy_in_out(
             state, nodes_temp, source_temp,
             flow_temp,

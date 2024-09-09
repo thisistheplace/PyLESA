@@ -15,3 +15,9 @@ class Insulation(str, Enum, metaclass=SingleTypeCheck):
 class AmbientLocation(str, Enum, metaclass=SingleTypeCheck):
     INSIDE = "INSIDE"
     OUTSIDE = "OUTSIDE"
+
+
+class ChargingState(str, Enum, metaclass=SingleTypeCheck):
+    CHARGING = "CHARGING"
+    DISCHARGING = "DISCHARGING"
+    STANDBY = "STANDBY"

@@ -1,10 +1,11 @@
 from dataclasses import dataclass
 import math
+import numpy as np
 import pandas as pd
 import pytest
 from unittest.mock import patch, Mock
 
-from pylesa.storage.enums import AmbientLocation, Insulation
+from pylesa.storage.enums import AmbientLocation, Insulation, ChargingState
 from pylesa.storage.hot_water_tank import HotWaterTank
 
 
@@ -104,9 +105,6 @@ class TestTank:
             2 * (tank.capacity / (2.5 * math.pi)) ** (1.0 / 3)
         ) * (7 / 8)
 
-    def test_inside_ambient_temp(self, tank: HotWaterTank):
-        assert tank.amb_temp(0) == 15.0
-
 
 class TestOutside:
     def test_outside_missing_air_temp(self):
@@ -132,6 +130,11 @@ class TestOutside:
                 air_temperature=None,
             )
 
+
+class TestAmbientTemp:
+    def test_inside_ambient_temp(self, tank: HotWaterTank):
+        assert tank.amb_temp(0) == 15.0
+
     def test_outside_ambient_temp(self, tank: HotWaterTank):
         tank.location = AmbientLocation.OUTSIDE
         tank.air_temperature = pd.DataFrame.from_dict(
@@ -139,13 +142,82 @@ class TestOutside:
         )
         assert tank.amb_temp(1) == 2.0
 
+    def test_ambient_temp_bad_location(self, tank: HotWaterTank):
+        tank.location = None
+        with pytest.raises(ValueError):
+            tank.amb_temp(0)
+
+
+class TestChargingFunction:
+    def test_discharging_and_standby(self, tank: HotWaterTank):
+        node_temps = [60.0, 60.0, 60.0, 60.0]
+        for state in [ChargingState.DISCHARGING, ChargingState.STANDBY]:
+            got = tank.charging_function(state, node_temps, 70.0)
+            assert np.allclose(got, 0)
+
+    def test_top_charging(self, tank: HotWaterTank):
+        node_temps = [60.0, 60.0, 60.0, 60.0]
+        state = tank.charging_function(ChargingState.CHARGING, node_temps, 70.0)
+        # Top node is CHARGING
+        assert np.allclose(state, [1, 0, 0, 0])
+
+    def test_mid_charging(self, tank: HotWaterTank):
+        node_temps = [71.0, 71.0, 60.0, 60.0]
+        state = tank.charging_function(ChargingState.CHARGING, node_temps, 70.0)
+        # Mid node is CHARGING
+        assert np.allclose(state, [0, 0, 1, 0])
+
+    def test_bottom_charging(self, tank: HotWaterTank):
+        node_temps = [71.0, 71.0, 71.0, 60.0]
+        state = tank.charging_function(ChargingState.CHARGING, node_temps, 70.0)
+        # Mid node is CHARGING
+        assert np.allclose(state, [0, 0, 0, 1])
+
+    def test_no_charging(self, tank: HotWaterTank):
+        node_temps = [71.0, 71.0, 71.0, 71.0]
+        state = tank.charging_function(ChargingState.CHARGING, node_temps, 70.0)
+        # Mid node is CHARGING
+        assert np.allclose(state, [0, 0, 0, 0])
+
+
+class TestDischargingFunction:
+    def test_charging_and_standby(self, tank: HotWaterTank):
+        node_temps = [60.0, 60.0, 60.0, 60.0]
+        for state in [ChargingState.CHARGING, ChargingState.STANDBY]:
+            got = tank.discharging_function(state, node_temps, 50.0)
+            assert np.allclose(got, 0)
+
+    def test_top_discharging(self, tank: HotWaterTank):
+        node_temps = [60.0, 60.0, 60.0, 60.0]
+        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        # Top node is discharging
+        assert np.allclose(state, [1, 0, 0, 0])
+
+    def test_mid_discharging(self, tank: HotWaterTank):
+        node_temps = [49.0, 49.0, 60.0, 60.0]
+        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        # Mid node is discharging
+        assert np.allclose(state, [0, 0, 1, 0])
+
+    def test_bottom_discharging(self, tank: HotWaterTank):
+        node_temps = [49.0, 49.0, 49.0, 60.0]
+        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        # Mid node is discharging
+        assert np.allclose(state, [0, 0, 0, 1])
+
+    def test_no_discharging(self, tank: HotWaterTank):
+        node_temps = [49.0, 49.0, 49.0, 49.0]
+        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        # Mid node is discharging
+        assert np.allclose(state, [0, 0, 0, 0])
+
 
 class TestCoefficients:
     @pytest.fixture
     def spec(self, tank: HotWaterTank):
         return CoeffSpec(
             tank=tank,
-            state="charging",
+            state=ChargingState.CHARGING,
             node=1,
             flow=65.0,
             source=70.0,

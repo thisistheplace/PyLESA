@@ -1,6 +1,6 @@
 import pytest
 
-from pylesa.storage.enums import AmbientLocation, Insulation
+from pylesa.storage.enums import AmbientLocation, Insulation, ChargingState
 from pylesa.io.enums import SingleTypeCheck
 
 
@@ -20,3 +20,12 @@ class TestAmbientLocation:
     @pytest.mark.parametrize("location", ["INSIDE", "OUTSIDE"])
     def test_model_options(self, location):
         assert location in AmbientLocation
+
+
+class TestChargingState:
+    def test_metaclass(self):
+        assert isinstance(ChargingState, SingleTypeCheck)
+
+    @pytest.mark.parametrize("state", ["CHARGING", "DISCHARGING", "STANDBY"])
+    def test_model_options(self, state):
+        assert state in ChargingState

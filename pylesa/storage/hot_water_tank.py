@@ -12,7 +12,7 @@ from typing import Callable, Dict, List
 
 from scipy.integrate import odeint
 
-from .enums import Insulation, AmbientLocation
+from .enums import Insulation, AmbientLocation, ChargingState
 from ..environment import weather
 
 LOG = logging.getLogger(__name__)
@@ -171,18 +171,16 @@ class HotWaterTank(object):
         return ambient_temp
 
     def discharging_function(
-        self, state: str, nodes_temp: List[float], flow_temp: float, node: int = None
+        self, state: ChargingState, nodes_temp: List[float], flow_temp: float
     ) -> List[int]:
         """Determine which nodes in the tank are discharging
 
         If the in mass exceeds the node volume then next node also charged.
 
         Args:
-            state, "charging" or "discharging"
-            total nodes, is the number of nodes being modelled
-            nodes_temp, is a dict of the nodes and their temperatures
+            state, ChargingState.CHARGING or ChargingState.DISCHARGING
+            nodes_temp, is a list of node temperatures
             flow_temp, is the temperature from the storage going into the system
-            node, only run function for this node
 
         Returns:
             list of 1 (discharging) or 0
@@ -190,14 +188,9 @@ class HotWaterTank(object):
         total_nodes = self.number_nodes
         out = list(range(len(self.node_list)))
 
-        if node is not None:
-            node_list = [node]
-        else:
-            node_list = self.node_list
+        if state == ChargingState.DISCHARGING:
 
-        if state == "discharging":
-
-            for idx, node in enumerate(node_list):
+            for idx, node in enumerate(self.node_list):
 
                 # this asks if we are looking at the top node
                 # and if the charging water is above this nodes temp
@@ -213,14 +206,14 @@ class HotWaterTank(object):
                     out[idx] = 1
 
                 # for out of bounds nodes, shouldnt occur
-                elif node < 0 or node == total_nodes + 1:
+                elif node < 0 or node >= total_nodes + 1:
                     out[idx] = 0
 
                 else:
                     out[idx] = 0
 
-        elif state == "charging" or state == "standby":
-            for idx, node in enumerate(node_list):
+        elif state == ChargingState.CHARGING or state == ChargingState.STANDBY:
+            for idx, node in enumerate(self.node_list):
                 out[idx] = 0
 
         return out
@@ -252,18 +245,16 @@ class HotWaterTank(object):
         return out
 
     def charging_function(
-        self, state: str, nodes_temp: List[float], source_temp: float, node: int = None
+        self, state: ChargingState, nodes_temp: List[float], source_temp: float
     ) -> List[int]:
         """Determine which nodes in the tank are charging
 
         If the in mass exceeds the node volume then next node also charged.
 
         Args:
-            state, "charging" or "discharging"
-            total nodes, is the number of nodes being modelled
-            nodes_temp, is a dict of the nodes and their temperatures
+            state, ChargingState.CHARGING or ChargingState.DISCHARGING
+            nodes_temp, is a list of node temperatures
             source_temp, is the temperature from the source going into the storage
-            node, only run function for this node
 
         Returns:
             list of 1 (charging) or 0
@@ -271,14 +262,9 @@ class HotWaterTank(object):
         total_nodes = self.number_nodes
         out = list(range(len(self.node_list)))
 
-        if node is not None:
-            node_list = [node]
-        else:
-            node_list = self.node_list
+        if state == ChargingState.CHARGING:
 
-        if state == "charging":
-
-            for idx, node in enumerate(node_list):
+            for idx, node in enumerate(self.node_list):
 
                 # this asks if we are looking at the top node
                 # and if the charging water is above this nodes temp
@@ -297,14 +283,14 @@ class HotWaterTank(object):
                     out[idx] = 1
 
                 # for out of bounds nodes, shouldnt occur
-                elif node < 0 or node == total_nodes + 1:
+                elif node < 0 or node >= total_nodes + 1:
                     out[idx] = 0
 
                 else:
                     out[idx] = 0
 
-        elif state == "discharging" or "standby":
-            for idx, node in enumerate(node_list):
+        elif state == ChargingState.DISCHARGING or ChargingState.STANDBY:
+            for idx, node in enumerate(self.node_list):
                 out[idx] = 0
         return out
 
@@ -313,7 +299,7 @@ class HotWaterTank(object):
         function = {}
         for node in range(self.number_nodes):
 
-            if state == "charging" and node == self.number_nodes - 1:
+            if state == ChargingState.CHARGING and node == self.number_nodes - 1:
                 function[node] = 1
             else:
                 function[node] = 0
@@ -340,7 +326,7 @@ class HotWaterTank(object):
         else:
             node_discharging = bottom_node + 1
 
-        if state == "charging":
+        if state == ChargingState.CHARGING:
             if node <= node_charging:
                 mf["Fcnt"] = 0
                 mf["Fdnt"] = 0
@@ -355,7 +341,7 @@ class HotWaterTank(object):
                 mf["Fcnb"] = 1
                 mf["Fdnb"] = 0
         # discharging
-        elif state == "discharging":
+        elif state == ChargingState.DISCHARGING:
             if node == 0 or node <= node_discharging:
                 mf["Fcnt"] = 0
                 mf["Fdnt"] = 0
@@ -473,7 +459,7 @@ class HotWaterTank(object):
         temp_tank_bottom,
         temp_tank_top,
     ):
-        if state == "charging":
+        if state == ChargingState.CHARGING:
             mass_ts = self.thermal_storage_mass_charging(
                 thermal_output,
                 source_temp,
@@ -483,7 +469,7 @@ class HotWaterTank(object):
                 demand,
                 temp_tank_bottom,
             )
-        elif state == "discharging":
+        elif state == ChargingState.DISCHARGING:
             mass_ts = self.thermal_storage_mass_discharging(
                 thermal_output,
                 source_temp,
@@ -493,14 +479,14 @@ class HotWaterTank(object):
                 demand,
                 temp_tank_top,
             )
-        elif state == "standby":
+        elif state == ChargingState.STANDBY:
             mass_ts = 0
 
         return mass_ts
 
     def coefficient_A(
         self,
-        state: str,
+        state: ChargingState,
         node: int,
         nodes_temp: List[float],
         mass_flow: float,
@@ -510,7 +496,7 @@ class HotWaterTank(object):
         """Calculate coefficient A
 
         Args:
-            state, 'charging' or 'discharging'
+            state, ChargingState.CHARGING or ChargingState.DISCHARGING
             node, index in nodes_temp list to calculate coefficient for
             nodes_temp, list of nodal temperatures
             mass_flow, mass flow rate
@@ -739,7 +725,7 @@ class HotWaterTank(object):
         check = 0.0
         for node in range(len(nodes_temp)):
             check += nodes_temp[node]
-        if check == source_temp * len(nodes_temp) and state == "charging":
+        if check == source_temp * len(nodes_temp) and state == ChargingState.CHARGING:
             return nodes_temp * len(nodes_temp)
 
         # node indexes
@@ -812,10 +798,16 @@ class HotWaterTank(object):
         nodes_temp_sum = 0.0
         for node in range(len(nodes_temp)):
             nodes_temp_sum += nodes_temp[node]
-        if nodes_temp_sum >= source_temp * len(nodes_temp) and state == "charging":
+        if (
+            nodes_temp_sum >= source_temp * len(nodes_temp)
+            and state == ChargingState.CHARGING
+        ):
             return 0.0
 
-        if nodes_temp_sum <= return_temp * len(nodes_temp) and state == "discharging":
+        if (
+            nodes_temp_sum <= return_temp * len(nodes_temp)
+            and state == ChargingState.DISCHARGING
+        ):
             return 0.0
 
         if self.capacity == 0:
@@ -839,13 +831,16 @@ class HotWaterTank(object):
 
         # solve ODE
         for i in range(1, t + 1):
-            if state == "charging" and source_temp > nodes_temp[self.number_nodes - 1]:
+            if (
+                state == ChargingState.CHARGING
+                and source_temp > nodes_temp[self.number_nodes - 1]
+            ):
                 energy = (
                     self.node_mass
                     * cp
                     * (source_temp - nodes_temp[self.number_nodes - 1])
                 )
-            elif state == "discharging" and nodes_temp[0] > flow_temp:
+            elif state == ChargingState.DISCHARGING and nodes_temp[0] > flow_temp:
                 energy = self.node_mass * cp * (nodes_temp[0] - return_temp)
             else:
                 energy = 0

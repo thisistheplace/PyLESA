@@ -14,6 +14,7 @@ from ..io import inputs
 from ..constants import OUTDIR
 from ..heat.models import PerformanceArray
 from ..heat.enums import Fuel
+from ..storage.enums import ChargingState
 
 LOG = logging.getLogger(__name__)
 
@@ -87,7 +88,7 @@ class Scheduler(object):
                 return_temp_nodes.append(rt)
             # charging from return temp to source temp is max capacity
             max_capacity[t] = self.myHotWaterTank.max_energy_in_out(
-                'charging', return_temp_nodes,
+                ChargingState.CHARGING, return_temp_nodes,
                 st[timestep], ft[timestep], rt, timestep)
 
         # create instance of Check class
@@ -206,7 +207,7 @@ class Scheduler(object):
         max_cap = m.Param(value=list(max_capacity[t1:t2]))
         # initial state of charge
         init_soc = self.myHotWaterTank.max_energy_in_out(
-            'discharging', prev_result['final_nodes_temp'],
+            ChargingState.DISCHARGING, prev_result['final_nodes_temp'],
             st[hour], ft[hour], rt, hour)
         # max_charge = m.Intermediate(max_cap - init_soc)
         # for clarity max discharge is simply the soc
@@ -348,28 +349,28 @@ class Scheduler(object):
 
         if TSc_ > TSd_:
             max_c = self.myHotWaterTank.max_energy_in_out(
-                'charging',
+                ChargingState.CHARGING,
                 prev_result['final_nodes_temp'],
                 st[h], ft[h], rt, h)
             TSc[h] = min(max_c, TSc_)
             TSd[h] = 0
             if TSc[h] == 0.0:
-                state = 'standby'
+                state = ChargingState.STANDBY
             else:
-                state = 'charging'
+                state = ChargingState.CHARGING
         elif TSd_ > TSc_:
             max_d = self.myHotWaterTank.max_energy_in_out(
-                'discharging',
+                ChargingState.DISCHARGING,
                 prev_result['final_nodes_temp'],
                 st[h], ft[h], rt, h)
             TSd[h] = min(max_d, TSd_)
             TSc[h] = 0.0
             if TSd[h] == 0.0:
-                state = 'standby'
+                state = ChargingState.STANDBY
             else:
-                state = 'discharging'
+                state = ChargingState.DISCHARGING
         else:
-            state = 'standby'
+            state = ChargingState.STANDBY
 
         # thermal_output = HPt[h] + aux[h]
         # next_nodes_temp = self.myHotWaterTank.new_nodes_temp(
@@ -600,7 +601,7 @@ class Scheduler(object):
                     'aux_rd': 0, 'aux_rs': 0,
                     'aux_d': 0, 'aux_s': 0,
                     'TSc': 0, 'TSd': 0,
-                    'final_nodes_temp': init_temps, 'state': 'standby',
+                    'final_nodes_temp': init_temps, 'state': ChargingState.STANDBY,
                     'import_cost': self.import_cost[first_hour],
                     'export': self.export_cost,
                     'soc_ES': ES_init,
@@ -652,7 +653,7 @@ class Scheduler(object):
                         'aux_rd': 0, 'aux_rs': 0,
                         'aux_d': 0, 'aux_s': 0,
                         'TSc': 0, 'TSd': 0,
-                        'final_nodes_temp': init_temps, 'state': 'standby',
+                        'final_nodes_temp': init_temps, 'state': ChargingState.STANDBY,
                         'import_cost': self.import_cost[first_hour],
                         'export': self.export_cost,
                         'soc_ES': ES_init,
