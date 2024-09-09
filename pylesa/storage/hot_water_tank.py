@@ -159,7 +159,7 @@ class HotWaterTank(object):
         if self.location == AmbientLocation.OUTSIDE:
 
             w = weather.Weather(air_temperature=self.air_temperature).hot_water_tank()
-            ambient_temp = w["air_temperature"]["air_temperature"][timestep]
+            ambient_temp = w["air_temperature"][timestep]
 
         elif self.location == AmbientLocation.INSIDE:
             ambient_temp = 15.0
@@ -718,6 +718,7 @@ class HotWaterTank(object):
                     dzdt[idx] = dTdt
 
             return dzdt
+
         return model_temp
 
     def new_nodes_temp(
@@ -795,7 +796,9 @@ class HotWaterTank(object):
                 timestep,
             )
 
-            z = odeint(self._model_temp(nodes_temp), nodes_temp, tspan, args=(coefficients,))
+            z = odeint(
+                self._model_temp(nodes_temp), nodes_temp, tspan, args=(coefficients,)
+            )
 
             nodes_temp = z[1]
             nodes_temp = sorted(nodes_temp, reverse=True)
@@ -859,7 +862,9 @@ class HotWaterTank(object):
                 )
             )
 
-            z = odeint(self._model_temp(nodes_temp), nodes_temp, tspan, args=(coefficients[i],))
+            z = odeint(
+                self._model_temp(nodes_temp), nodes_temp, tspan, args=(coefficients[i],)
+            )
             nodes_temp = z[1]
 
         # convert J to kWh by divide by 3600000

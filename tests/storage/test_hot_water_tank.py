@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import math
+import pandas as pd
 import pytest
 from unittest.mock import patch, Mock
 
@@ -109,10 +110,34 @@ class TestTank:
 
 class TestOutside:
     def test_outside_missing_air_temp(self):
-        pass
+        # Raises value error due to missing air temperature with OUTSIDE location
+        with pytest.raises(ValueError):
+            HotWaterTank(
+                capacity=100,
+                insulation=Insulation.POLYURETHANE,
+                location=AmbientLocation.OUTSIDE,
+                number_nodes=4,
+                dimensions={
+                    "width": 5
+                },  # height and insulation_thickness are overwritten!
+                tank_openings={
+                    "tank_opening": 1.0,
+                    "tank_opening_diameter": 1.5,
+                    "uninsulated_connections": 2,
+                    "uninsulated_connections_diameter": 0.5,
+                    "insulated_connections": 2,
+                    "insulated_connections_diameter": 0.2,
+                },
+                correction_factors={"insulation_factor": 2.0, "overall_factor": 3.0},
+                air_temperature=None,
+            )
 
-    def test_outside_ambient_temp(self):
-        pass
+    def test_outside_ambient_temp(self, tank: HotWaterTank):
+        tank.location = AmbientLocation.OUTSIDE
+        tank.air_temperature = pd.DataFrame.from_dict(
+            {"air_temperature": [1.0, 2.0, 3.0]}
+        )
+        assert tank.amb_temp(1) == 2.0
 
 
 class TestCoefficients:

@@ -75,7 +75,7 @@ def init(root: Path, subname: str) -> Dict[str, object]:
         ts_inputs['dimensions'],
         ts_inputs['tank_openings'],
         ts_inputs['correction_factors'],
-        air_temperature=input_weather)
+        air_temperature=input_weather["air_temperature"])
 
     # Setup heat pump class
     inputs_basics = myInputs.heatpump_basics()
