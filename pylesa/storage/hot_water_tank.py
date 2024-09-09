@@ -170,94 +170,20 @@ class HotWaterTank(object):
             raise ValueError(msg)
         return ambient_temp
 
-    def discharging_function(
-        self, state: ChargingState, nodes_temp: List[float], flow_temp: float
-    ) -> List[int]:
-        """Determine which nodes in the tank are discharging
-
-        If the in mass exceeds the node volume then next node also charged.
-
-        Args:
-            state, ChargingState.CHARGING or ChargingState.DISCHARGING
-            nodes_temp, is a list of node temperatures
-            flow_temp, is the temperature from the storage going into the system
-
-        Returns:
-            list of 1 (discharging) or 0
-        """
-        total_nodes = self.number_nodes
-        out = list(range(len(self.node_list)))
-
-        if state == ChargingState.DISCHARGING:
-
-            for idx, node in enumerate(self.node_list):
-
-                # this asks if we are looking at the top node
-                # and if the charging water is above this nodes temp
-                if node == 0 and flow_temp <= nodes_temp[0]:
-                    out[idx] = 1
-
-                # if the source temp is lower than
-                elif node == 0 and flow_temp >= nodes_temp[0]:
-                    out[idx] = 0
-
-                # top node then goes in other node
-                elif flow_temp < nodes_temp[node] and flow_temp >= nodes_temp[node - 1]:
-                    out[idx] = 1
-
-                # for out of bounds nodes, shouldnt occur
-                elif node < 0 or node >= total_nodes + 1:
-                    out[idx] = 0
-
-                else:
-                    out[idx] = 0
-
-        elif state == ChargingState.CHARGING or state == ChargingState.STANDBY:
-            for idx, node in enumerate(self.node_list):
-                out[idx] = 0
-
-        return out
-
-    def discharging_bottom_node(self, nodes_temp, flow_temp, df):
-
-        total_nodes = self.number_nodes
-        out = list(range(len(self.node_list)))
-        bottom_node = total_nodes - 1
-
-        if 1 in df:
-
-            for idx, node in enumerate(self.node_list):
-
-                # this asks if we are looking at the bottom node
-                if node == bottom_node and nodes_temp[0] >= flow_temp:
-                    out[idx] = 1
-
-                elif node == bottom_node and nodes_temp[0] < flow_temp:
-                    out[idx] = 0
-
-                else:
-                    out[idx] = 0
-
-        else:
-            for idx, node in enumerate(self.node_list):
-                out[idx] = 0
-
-        return out
-
     def charging_function(
-        self, state: ChargingState, nodes_temp: List[float], source_temp: float
-    ) -> List[int]:
-        """Determine which nodes in the tank are charging
+        self, state: ChargingState, nodes_temp: List[float], temp: float
+    ) -> List[ChargingState]:
+        """Determine which nodes in the tank are charging or discharging
 
         If the in mass exceeds the node volume then next node also charged.
 
         Args:
             state, ChargingState.CHARGING or ChargingState.DISCHARGING
             nodes_temp, is a list of node temperatures
-            source_temp, is the temperature from the source going into the storage
+            temp, is the temperature going in (charging) or out (discharging) of storage
 
         Returns:
-            list of 1 (charging) or 0
+            list of ChargingState
         """
         total_nodes = self.number_nodes
         out = list(range(len(self.node_list)))
@@ -268,60 +194,95 @@ class HotWaterTank(object):
 
                 # this asks if we are looking at the top node
                 # and if the charging water is above this nodes temp
-                if node == 0 and source_temp >= nodes_temp[0]:
-                    out[idx] = 1
+                if node == 0 and temp >= nodes_temp[0]:
+                    out[idx] = ChargingState.CHARGING
 
                 # if the source temp is lower than
-                elif node == 0 and source_temp <= nodes_temp[0]:
-                    out[idx] = 0
+                elif node == 0 and temp <= nodes_temp[0]:
+                    out[idx] = ChargingState.STANDBY
 
                 # top node then goes in other node
-                elif (
-                    source_temp >= nodes_temp[node]
-                    and source_temp <= nodes_temp[node - 1]
-                ):
-                    out[idx] = 1
+                elif temp >= nodes_temp[node] and temp <= nodes_temp[node - 1]:
+                    out[idx] = ChargingState.CHARGING
 
                 # for out of bounds nodes, shouldnt occur
                 elif node < 0 or node >= total_nodes + 1:
-                    out[idx] = 0
+                    out[idx] = ChargingState.STANDBY
 
                 else:
-                    out[idx] = 0
+                    out[idx] = ChargingState.STANDBY
 
-        elif state == ChargingState.DISCHARGING or ChargingState.STANDBY:
+        elif state == ChargingState.DISCHARGING:
             for idx, node in enumerate(self.node_list):
-                out[idx] = 0
+                # this asks if we are looking at the top node
+                # and if the charging water is above this nodes temp
+                if node == 0 and temp <= nodes_temp[0]:
+                    out[idx] = ChargingState.DISCHARGING
+
+                # if the source temp is lower than
+                elif node == 0 and temp >= nodes_temp[0]:
+                    out[idx] = ChargingState.STANDBY
+
+                # top node then goes in other node
+                elif temp < nodes_temp[node] and temp >= nodes_temp[node - 1]:
+                    out[idx] = ChargingState.DISCHARGING
+
+                # for out of bounds nodes, shouldnt occur
+                elif node < 0 or node >= total_nodes + 1:
+                    out[idx] = ChargingState.STANDBY
+
+                else:
+                    out[idx] = ChargingState.STANDBY
+
+        elif state == ChargingState.STANDBY:
+            for idx, node in enumerate(self.node_list):
+                out[idx] = ChargingState.STANDBY
+
         return out
 
-    def charging_top_node(self, state):
+    def discharging_bottom_node(
+        self, nodes_temp: List[float], flow_temp: float, cf: List[ChargingState]
+    ):
+        total_nodes = self.number_nodes
+        out = list(range(len(self.node_list)))
+        bottom_node = total_nodes - 1
 
-        function = {}
-        for node in range(self.number_nodes):
+        if ChargingState.DISCHARGING in cf:
 
-            if state == ChargingState.CHARGING and node == self.number_nodes - 1:
-                function[node] = 1
-            else:
-                function[node] = 0
+            for idx, node in enumerate(self.node_list):
 
-        return function
+                # this asks if we are looking at the bottom node
+                if node == bottom_node and nodes_temp[0] >= flow_temp:
+                    out[idx] = ChargingState.DISCHARGING
 
-    def mixing_function(self, state, node, cf, df):
+                elif node == bottom_node and nodes_temp[0] < flow_temp:
+                    out[idx] = ChargingState.STANDBY
+
+                else:
+                    out[idx] = ChargingState.STANDBY
+
+        else:
+            for idx, node in enumerate(self.node_list):
+                out[idx] = ChargingState.STANDBY
+
+        return out
+
+    def mixing_function(self, state: ChargingState, node: int, cf: List[ChargingState]):
 
         total_nodes = self.number_nodes
         bottom_node = total_nodes - 1
 
         mf = {}
 
-        if 1 in cf:
+        if ChargingState.CHARGING in cf:
             for n in range(self.number_nodes):
-                if cf[n] == 1:
+                if cf[n] == ChargingState.CHARGING:
                     node_charging = n
         else:
             node_charging = bottom_node + 1
-        if 1 in df:
+        if ChargingState.DISCHARGING in cf:
             for n in range(self.number_nodes):
-                if df[n] == 1:
+                if cf[n] == ChargingState.DISCHARGING:
                     node_discharging = n
         else:
             node_discharging = bottom_node + 1
@@ -490,9 +451,8 @@ class HotWaterTank(object):
         node: int,
         nodes_temp: List[float],
         mass_flow: float,
-        cf: List[int],
-        df: List[int],
-    ):
+        cf: List[ChargingState],
+    ) -> float:
         """Calculate coefficient A
 
         Args:
@@ -500,8 +460,7 @@ class HotWaterTank(object):
             node, index in nodes_temp list to calculate coefficient for
             nodes_temp, list of nodal temperatures
             mass_flow, mass flow rate
-            cf, list of nodes where value of 1 is charging
-            df, list of nodes where value of 1 is discharging
+            cf, list of charging state of nodes
 
         Returns:
             Value of coefficient A
@@ -520,9 +479,9 @@ class HotWaterTank(object):
         # correction factors
         Fi = self.correction_factors["insulation_factor"]
         Fe = self.correction_factors["overall_factor"]
-        Fd = df[node]
-        mf = self.mixing_function(state, node, cf, df)
-        Fco = self.charging_top_node(state)[node]
+        Fd = cf[node] == ChargingState.DISCHARGING
+        mf = self.mixing_function(state, node, cf)
+        Fco = state == ChargingState.CHARGING and node == (self.number_nodes - 1)
 
         A = (
             -Fd * mass_flow * cp
@@ -534,26 +493,29 @@ class HotWaterTank(object):
 
         return A
 
-    def coefficient_B(self, state, node, mass_flow, cf, df):
-        mf = self.mixing_function(state, node, cf, df)
+    def coefficient_B(
+        self, state: ChargingState, node: int, mass_flow: float, cf: List[ChargingState]
+    ) -> float:
+        mf = self.mixing_function(state, node, cf)
         return mf["Fcnt"] * mass_flow / self.node_mass
 
-    def coefficient_C(self, state, node, mass_flow, cf, df):
-        mf = self.mixing_function(state, node, cf, df)
+    def coefficient_C(
+        self, state: ChargingState, node: int, mass_flow: float, cf: List[ChargingState]
+    ) -> float:
+        mf = self.mixing_function(state, node, cf)
         return mf["Fdnb"] * mass_flow / self.node_mass
 
     def coefficient_D(
         self,
-        node,
-        nodes_temp,
-        mass_flow,
-        source_temp,
-        flow_temp,
-        return_temp,
-        timestep,
-        cf,
-        df,
-    ):
+        node: int,
+        nodes_temp: List[float],
+        mass_flow: float,
+        source_temp: float,
+        flow_temp: float,
+        return_temp: float,
+        timestep: int,
+        cf: List[ChargingState],
+    ) -> float:
         # specific heat at temperature of node i
         cp = self.specific_heat_water(nodes_temp[node])
 
@@ -569,8 +531,11 @@ class HotWaterTank(object):
         Fi = self.correction_factors["insulation_factor"]
         Fe = self.correction_factors["overall_factor"]
 
-        Fc = cf[node]
-        Fdi = self.discharging_bottom_node(nodes_temp, flow_temp, df)[node]
+        Fc = cf[node] == ChargingState.CHARGING
+        Fdi = (
+            self.discharging_bottom_node(nodes_temp, flow_temp, cf)[node]
+            == ChargingState.DISCHARGING
+        )
         Ta = self.amb_temp(timestep)
 
         cl = self.connection_losses()
@@ -634,25 +599,28 @@ class HotWaterTank(object):
 
     def _set_of_coefficients(
         self,
-        state,
-        nodes_temp,
-        source_temp,
-        flow_temp,
-        return_temp,
-        timestep,
-        mass_flow,
+        state: ChargingState,
+        nodes_temp: List[float],
+        source_temp: float,
+        flow_temp: float,
+        return_temp: float,
+        timestep: int,
+        mass_flow: float,
     ):
         # Charging and discharging data
-        cf = self.charging_function(state, nodes_temp, source_temp)
-        df = self.discharging_function(state, nodes_temp, flow_temp)
+        if state == ChargingState.CHARGING:
+            _temp = source_temp
+        else:
+            _temp = flow_temp
+        cf = self.charging_function(state, nodes_temp, _temp)
 
         # Initialize output list
         out = list(range(self.number_nodes))
         for idx, node in enumerate(range(self.number_nodes)):
             coefficients = {
-                "A": self.coefficient_A(state, node, nodes_temp, mass_flow, cf, df),
-                "B": self.coefficient_B(state, node, mass_flow, cf, df),
-                "C": self.coefficient_C(state, node, mass_flow, cf, df),
+                "A": self.coefficient_A(state, node, nodes_temp, mass_flow, cf),
+                "B": self.coefficient_B(state, node, mass_flow, cf),
+                "C": self.coefficient_C(state, node, mass_flow, cf),
                 "D": self.coefficient_D(
                     node,
                     nodes_temp,
@@ -662,7 +630,6 @@ class HotWaterTank(object):
                     return_temp,
                     timestep,
                     cf,
-                    df,
                 ),
             }
             out[idx] = coefficients

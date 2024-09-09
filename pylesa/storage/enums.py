@@ -1,4 +1,4 @@
-from enum import Enum
+from enum import Enum, IntEnum
 import logging
 
 from ..io.enums import SingleTypeCheck
@@ -17,7 +17,7 @@ class AmbientLocation(str, Enum, metaclass=SingleTypeCheck):
     OUTSIDE = "OUTSIDE"
 
 
-class ChargingState(str, Enum, metaclass=SingleTypeCheck):
-    CHARGING = "CHARGING"
-    DISCHARGING = "DISCHARGING"
-    STANDBY = "STANDBY"
+class ChargingState(IntEnum):
+    STANDBY = 0
+    CHARGING = 1
+    DISCHARGING = 2

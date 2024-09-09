@@ -24,15 +24,11 @@ class CoeffSpec:
 
     @property
     def cf(self):
-        return self.tank.charging_function(
-            self.state, self.nodes_temp, self.source, self.node
-        )
-
-    @property
-    def df(self):
-        return self.tank.discharging_function(
-            self.state, self.nodes_temp, self.flow, self.node
-        )
+        if self.state == ChargingState.CHARGING:
+            temp = self.source
+        else:
+            temp = self.flow
+        return self.tank.charging_function(self.state, self.nodes_temp, temp)
 
     @property
     def mass_flow(self):
@@ -149,12 +145,6 @@ class TestAmbientTemp:
 
 
 class TestChargingFunction:
-    def test_discharging_and_standby(self, tank: HotWaterTank):
-        node_temps = [60.0, 60.0, 60.0, 60.0]
-        for state in [ChargingState.DISCHARGING, ChargingState.STANDBY]:
-            got = tank.charging_function(state, node_temps, 70.0)
-            assert np.allclose(got, 0)
-
     def test_top_charging(self, tank: HotWaterTank):
         node_temps = [60.0, 60.0, 60.0, 60.0]
         state = tank.charging_function(ChargingState.CHARGING, node_temps, 70.0)
@@ -179,37 +169,34 @@ class TestChargingFunction:
         # Mid node is CHARGING
         assert np.allclose(state, [0, 0, 0, 0])
 
-
-class TestDischargingFunction:
-    def test_charging_and_standby(self, tank: HotWaterTank):
-        node_temps = [60.0, 60.0, 60.0, 60.0]
-        for state in [ChargingState.CHARGING, ChargingState.STANDBY]:
-            got = tank.discharging_function(state, node_temps, 50.0)
-            assert np.allclose(got, 0)
-
     def test_top_discharging(self, tank: HotWaterTank):
         node_temps = [60.0, 60.0, 60.0, 60.0]
-        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        state = tank.charging_function(ChargingState.DISCHARGING, node_temps, 50.0)
         # Top node is discharging
-        assert np.allclose(state, [1, 0, 0, 0])
+        assert np.allclose(state, [2, 0, 0, 0])
 
     def test_mid_discharging(self, tank: HotWaterTank):
         node_temps = [49.0, 49.0, 60.0, 60.0]
-        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        state = tank.charging_function(ChargingState.DISCHARGING, node_temps, 50.0)
         # Mid node is discharging
-        assert np.allclose(state, [0, 0, 1, 0])
+        assert np.allclose(state, [0, 0, 2, 0])
 
     def test_bottom_discharging(self, tank: HotWaterTank):
         node_temps = [49.0, 49.0, 49.0, 60.0]
-        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        state = tank.charging_function(ChargingState.DISCHARGING, node_temps, 50.0)
         # Mid node is discharging
-        assert np.allclose(state, [0, 0, 0, 1])
+        assert np.allclose(state, [0, 0, 0, 2])
 
     def test_no_discharging(self, tank: HotWaterTank):
         node_temps = [49.0, 49.0, 49.0, 49.0]
-        state = tank.discharging_function(ChargingState.DISCHARGING, node_temps, 50.0)
+        state = tank.charging_function(ChargingState.DISCHARGING, node_temps, 50.0)
         # Mid node is discharging
         assert np.allclose(state, [0, 0, 0, 0])
+
+    def test_standby(self, tank: HotWaterTank):
+        node_temps = [60.0, 60.0, 60.0, 60.0]
+        got = tank.charging_function(ChargingState.STANDBY, node_temps, 70.0)
+        assert np.allclose(got, 0)
 
 
 class TestCoefficients:
@@ -258,20 +245,14 @@ class TestCoefficients:
 
     def test_coefficient_A(self, spec: CoeffSpec, tank: HotWaterTank):
         assert tank.coefficient_A(
-            spec.state, spec.node, spec.nodes_temp, spec.mass_flow, spec.cf, spec.df
+            spec.state, spec.node, spec.nodes_temp, spec.mass_flow, spec.cf
         )
 
     def test_coefficient_B(self, spec: CoeffSpec, tank: HotWaterTank):
-        assert (
-            tank.coefficient_B(spec.state, spec.node, spec.mass_flow, spec.cf, spec.df)
-            == 0
-        )
+        assert tank.coefficient_B(spec.state, spec.node, spec.mass_flow, spec.cf) == 1
 
     def test_coefficient_C(self, spec: CoeffSpec, tank: HotWaterTank):
-        assert (
-            tank.coefficient_C(spec.state, spec.node, spec.mass_flow, spec.cf, spec.df)
-            == 0
-        )
+        assert tank.coefficient_C(spec.state, spec.node, spec.mass_flow, spec.cf) == 0
 
     def test_coefficient_D(self, spec: CoeffSpec, tank: HotWaterTank):
         assert tank.coefficient_D(
@@ -283,5 +264,4 @@ class TestCoefficients:
             spec.treturn,
             spec.timestep,
             spec.cf,
-            spec.df,
         )
